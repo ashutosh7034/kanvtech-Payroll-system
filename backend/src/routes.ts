@@ -1,0 +1,36 @@
+import { Router } from 'express';
+import { authRouter } from './modules/auth/auth.routes.js';
+import { orgRouter } from './modules/organization/org.routes.js';
+import { mastersRouter } from './modules/masters/masters.routes.js';
+import { employeeRouter } from './modules/employees/employee.routes.js';
+import { payrollRouter } from './modules/payroll/payroll.routes.js';
+import { taxRouter } from './modules/tax/tax.routes.js';
+import { loanRouter } from './modules/loans/loan.routes.js';
+import { leaveRouter } from './modules/leave/leave.routes.js';
+import { arrearRouter } from './modules/arrears/arrear.routes.js';
+import { incrementRouter } from './modules/increments/increment.routes.js';
+import { otherPaymentRouter } from './modules/other-payments/otherPayment.routes.js';
+import { gpfRouter } from './modules/gpf/gpf.routes.js';
+import { importRouter } from './modules/imports/import.routes.js';
+import { paymentRouter } from './modules/payments/payment.routes.js';
+import { reportRouter } from './modules/reports/report.routes.js';
+import { selfServiceRouter } from './modules/self-service/selfService.routes.js';
+
+export const apiRouter = Router();
+
+apiRouter.use('/auth', authRouter);
+apiRouter.use('/org', orgRouter);
+apiRouter.use('/masters', mastersRouter);
+apiRouter.use('/employees', employeeRouter);
+apiRouter.use('/payroll', payrollRouter);
+apiRouter.use('/tax', taxRouter);
+apiRouter.use('/loans', loanRouter);
+apiRouter.use('/leave', leaveRouter);
+apiRouter.use('/arrears', arrearRouter);
+apiRouter.use('/increments', incrementRouter);
+apiRouter.use('/other-payments', otherPaymentRouter);
+apiRouter.use('/gpf', gpfRouter);
+apiRouter.use('/imports', importRouter);
+apiRouter.use('/payments', paymentRouter);
+apiRouter.use('/reports', reportRouter);
+apiRouter.use('/self-service', selfServiceRouter);
