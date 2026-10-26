@@ -33,6 +33,7 @@ yarn-error.log*
 *.sqlite3
 *.db
 *.sql
+!backend/prisma/migrations/**/*.sql
 *.dump
 docs/payflow/backup/
 
