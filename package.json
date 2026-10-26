@@ -1,0 +1,12 @@
+{
+  "name": "payroll-management-system",
+  "private": true,
+  "scripts": {
+    "build": "npm run build --prefix backend && npm run build --prefix frontend",
+    "test": "npm test --prefix backend"
+  },
+  "dependencies": {
+    "@neon/config": "^1.9.4",
+    "@neon/env": "^1.6.5"
+  }
+}
