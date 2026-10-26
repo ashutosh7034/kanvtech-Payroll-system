@@ -12,12 +12,35 @@ const app = express();
 app.use(helmet({
   crossOriginResourcePolicy: { policy: 'cross-origin' }
 }));
-const allowedOrigins = ENV.CORS_ORIGIN.includes(',')
-  ? ENV.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : (ENV.CORS_ORIGIN === '*' ? true : ENV.CORS_ORIGIN);
+const configuredOrigins = ENV.CORS_ORIGIN.split(',').map((s) => s.trim()).filter(Boolean);
 
 app.use(cors({
-  origin: allowedOrigins,
+  origin: (origin, callback) => {
+    // Allow server-to-server, curl, and tools without Origin header
+    if (!origin) return callback(null, true);
+
+    // Allow explicitly configured origins or wildcard
+    if (ENV.CORS_ORIGIN === '*' || configuredOrigins.includes(origin) || configuredOrigins.includes('*')) {
+      return callback(null, true);
+    }
+
+    // Allow all Vercel deployments (production domains and preview branches)
+    if (/^https:\/\/[a-zA-Z0-9_.-]+\.vercel\.app$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow Render web services
+    if (/^https:\/\/[a-zA-Z0-9_.-]+\.onrender\.com$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    // Allow local development (any localhost port)
+    if (/^http:\/\/localhost(:[0-9]+)?$/.test(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true
 }));
 app.use(express.json({ limit: '10mb' }));

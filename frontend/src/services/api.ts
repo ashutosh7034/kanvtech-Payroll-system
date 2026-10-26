@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000/api/v1';
+const rawBase = (import.meta.env.VITE_API_BASE_URL || '').trim().replace(/^["']|["']$/g, '');
+const API_BASE = (rawBase ? rawBase.replace(/\/+$/, '') : '') || 'http://localhost:4000/api/v1';
 
 export class ApiError extends Error {
   code: string;
