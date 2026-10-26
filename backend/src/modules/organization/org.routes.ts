@@ -6,113 +6,109 @@ import { AppError } from '../../middleware/errorHandler.js';
 
 export const orgRouter = Router();
 
-// Get Institution & Settings
-orgRouter.get('/institution', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// 1. Company Profile
+orgRouter.get('/company', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const institution = await prisma.institution.findUnique({
-      where: { id: req.user!.institutionId },
+    const company = await prisma.company.findUnique({
+      where: { id: req.user!.companyId },
       include: {
-        settings: true
+        _count: {
+          select: {
+            branches: true,
+            departments: true,
+            designations: true,
+            employees: true
+          }
+        }
       }
     });
-    res.status(200).json({ institution });
+    if (!company) throw new AppError('Company not found', 404);
+    res.status(200).json({ company });
   } catch (error) {
     next(error);
   }
 });
 
-// Update Institution Branding & Settings
-orgRouter.patch('/institution', authenticate, requireRole(['payroll_admin', 'platform_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+orgRouter.put('/company', authenticate, requireRole(['company_admin', 'platform_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = z.object({
-      name: z.string().optional(),
       brandName: z.string().optional(),
-      logoUrl: z.string().optional(),
+      legalName: z.string().min(1).optional(),
+      cinNumber: z.string().optional(),
+      gstin: z.string().optional(),
+      panNumber: z.string().optional(),
+      tanNumber: z.string().optional(),
+      pfEstablishmentCode: z.string().optional(),
+      esicCode: z.string().optional(),
+      ptrcNumber: z.string().optional(),
       contactEmail: z.string().email().optional(),
-      settings: z.record(z.string()).optional()
+      contactPhone: z.string().optional(),
+      website: z.string().optional()
     });
-
     const data = schema.parse(req.body);
 
-    const institution = await prisma.institution.update({
-      where: { id: req.user!.institutionId },
-      data: {
-        name: data.name,
-        brandName: data.brandName,
-        logoUrl: data.logoUrl,
-        contactEmail: data.contactEmail
-      }
+    const updated = await prisma.company.update({
+      where: { id: req.user!.companyId },
+      data
     });
 
-    if (data.settings) {
-      for (const [key, value] of Object.entries(data.settings)) {
-        await prisma.institutionSetting.upsert({
-          where: { institutionId_key: { institutionId: institution.id, key } },
-          update: { value },
-          create: { institutionId: institution.id, key, value }
-        });
-      }
-    }
-
-    await recordAudit(req, 'UPDATE_INSTITUTION', 'Institution', institution.id, data);
-    res.status(200).json({ institution });
+    await recordAudit(req, 'UPDATE_COMPANY', 'Company', updated.id, data);
+    res.status(200).json({ company: updated });
   } catch (error) {
     next(error);
   }
 });
 
-// OUs (Campuses/Faculties)
-orgRouter.get('/ous', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// 2. Branches
+orgRouter.get('/branches', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const ous = await prisma.organizationalUnit.findMany({
-      where: { institutionId: req.user!.institutionId },
+    const branches = await prisma.branch.findMany({
+      where: { companyId: req.user!.companyId },
       include: {
-        departments: true,
         _count: { select: { employees: true } }
       },
-      orderBy: { name: 'asc' }
+      orderBy: { isHeadquarters: 'desc' }
     });
-    res.status(200).json({ ous });
+    res.status(200).json({ branches });
   } catch (error) {
     next(error);
   }
 });
 
-orgRouter.post('/ous', authenticate, requireRole(['payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+orgRouter.post('/branches', authenticate, requireRole(['company_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = z.object({
       code: z.string().min(1),
       name: z.string().min(1),
-      type: z.enum(['CAMPUS', 'FACULTY', 'DIRECTORATE', 'REGIONAL_CENTRE', 'COLLEGE']).default('FACULTY'),
-      parentOuId: z.string().optional()
+      state: z.string().min(1),
+      city: z.string().min(1),
+      address: z.string().optional(),
+      pinCode: z.string().optional(),
+      isHeadquarters: z.boolean().default(false)
     });
     const data = schema.parse(req.body);
 
-    const ou = await prisma.organizationalUnit.create({
+    const branch = await prisma.branch.create({
       data: {
-        institutionId: req.user!.institutionId,
-        code: data.code,
-        name: data.name,
-        type: data.type,
-        parentOuId: data.parentOuId
+        companyId: req.user!.companyId,
+        ...data
       }
     });
 
-    await recordAudit(req, 'CREATE_OU', 'OrganizationalUnit', ou.id, data);
-    res.status(201).json({ ou });
+    await recordAudit(req, 'CREATE_BRANCH', 'Branch', branch.id, data);
+    res.status(201).json({ branch });
   } catch (error) {
     next(error);
   }
 });
 
-// Departments
+// 3. Departments
 orgRouter.get('/departments', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const departments = await prisma.department.findMany({
-      where: { ou: { institutionId: req.user!.institutionId } },
+      where: { companyId: req.user!.companyId },
       include: {
-        ou: true,
-        _count: { select: { employees: true } }
+        _count: { select: { employees: true, jobOpenings: true } }
       },
       orderBy: { name: 'asc' }
     });
@@ -122,36 +118,36 @@ orgRouter.get('/departments', authenticate, async (req: Request, res: Response, 
   }
 });
 
-orgRouter.post('/departments', authenticate, requireRole(['payroll_admin', 'payroll_ou_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+orgRouter.post('/departments', authenticate, requireRole(['company_admin', 'hr_manager']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = z.object({
-      ouId: z.string().min(1),
       code: z.string().min(1),
       name: z.string().min(1)
     });
     const data = schema.parse(req.body);
 
-    const dept = await prisma.department.create({
+    const department = await prisma.department.create({
       data: {
-        ouId: data.ouId,
-        code: data.code,
-        name: data.name
+        companyId: req.user!.companyId,
+        ...data
       }
     });
 
-    await recordAudit(req, 'CREATE_DEPARTMENT', 'Department', dept.id, data);
-    res.status(201).json({ department: dept });
+    await recordAudit(req, 'CREATE_DEPARTMENT', 'Department', department.id, data);
+    res.status(201).json({ department });
   } catch (error) {
     next(error);
   }
 });
 
-// Designations
+// 4. Designations
 orgRouter.get('/designations', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const designations = await prisma.designation.findMany({
-      where: { institutionId: req.user!.institutionId },
-      include: { _count: { select: { employees: true } } },
+      where: { companyId: req.user!.companyId },
+      include: {
+        _count: { select: { employees: true } }
+      },
       orderBy: { name: 'asc' }
     });
     res.status(200).json({ designations });
@@ -160,99 +156,55 @@ orgRouter.get('/designations', authenticate, async (req: Request, res: Response,
   }
 });
 
-orgRouter.post('/designations', authenticate, requireRole(['payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+orgRouter.post('/designations', authenticate, requireRole(['company_admin', 'hr_manager']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const schema = z.object({
       code: z.string().min(1),
-      name: z.string().min(1),
-      cadre: z.enum(['TEACHING', 'NON_TEACHING', 'ADMINISTRATIVE', 'TECHNICAL']).default('NON_TEACHING')
+      name: z.string().min(1)
     });
     const data = schema.parse(req.body);
 
-    const desig = await prisma.designation.create({
+    const designation = await prisma.designation.create({
       data: {
-        institutionId: req.user!.institutionId,
-        code: data.code,
-        name: data.name,
-        cadre: data.cadre
+        companyId: req.user!.companyId,
+        ...data
       }
     });
 
-    await recordAudit(req, 'CREATE_DESIGNATION', 'Designation', desig.id, data);
-    res.status(201).json({ designation: desig });
+    await recordAudit(req, 'CREATE_DESIGNATION', 'Designation', designation.id, data);
+    res.status(201).json({ designation });
   } catch (error) {
     next(error);
   }
 });
 
-// Employee Groups & Managed Payroll Groups
-orgRouter.get('/employee-groups', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+// 5. Job Bands
+orgRouter.get('/job-bands', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const groups = await prisma.employeeGroup.findMany({
-      where: { institutionId: req.user!.institutionId },
-      include: { _count: { select: { employees: true } } }
-    });
-    res.status(200).json({ employeeGroups: groups });
-  } catch (error) {
-    next(error);
-  }
-});
-
-orgRouter.get('/payroll-groups', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const groups = await prisma.managedPayrollGroup.findMany({
-      where: { institutionId: req.user!.institutionId },
-      include: { _count: { select: { employees: true } } }
-    });
-    res.status(200).json({ payrollGroups: groups });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Users and Role Mapping
-orgRouter.get('/users', authenticate, requireRole(['payroll_admin', 'platform_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const users = await prisma.user.findMany({
-      where: { institutionId: req.user!.institutionId },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        fullName: true,
-        active: true,
-        lastLoginAt: true,
-        createdAt: true,
-        userRoles: {
-          include: {
-            role: true,
-            ou: true
-          }
-        },
-        employee: {
-          select: {
-            id: true,
-            employeeCode: true,
-            firstName: true,
-            lastName: true
-          }
-        }
+    const jobBands = await prisma.jobBand.findMany({
+      where: { companyId: req.user!.companyId },
+      include: {
+        _count: { select: { employees: true } }
       },
-      orderBy: { username: 'asc' }
-    });
-    res.status(200).json({ users });
-  } catch (error) {
-    next(error);
-  }
-});
-
-// Roles list
-orgRouter.get('/roles', authenticate, async (_req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const roles = await prisma.role.findMany({
       orderBy: { code: 'asc' }
     });
-    res.status(200).json({ roles });
+    res.status(200).json({ jobBands });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 6. Cost Centers
+orgRouter.get('/cost-centers', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const costCenters = await prisma.costCenter.findMany({
+      where: { companyId: req.user!.companyId },
+      include: {
+        _count: { select: { employees: true } }
+      },
+      orderBy: { name: 'asc' }
+    });
+    res.status(200).json({ costCenters });
   } catch (error) {
     next(error);
   }

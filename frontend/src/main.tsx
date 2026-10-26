@@ -2,48 +2,58 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import './styles.css';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { api } from './services/api';
 import { LoginView } from './pages/LoginView';
 import { DashboardView } from './pages/DashboardView';
 import { EmployeesView } from './pages/EmployeesView';
-import { MastersView } from './pages/MastersView';
-import { PayrollProcessingView } from './pages/PayrollProcessingView';
-import { TaxView } from './pages/TaxView';
-import { LoansView } from './pages/LoansView';
+import { RecruitmentView } from './pages/RecruitmentView';
+import { AttendanceView } from './pages/AttendanceView';
 import { LeaveView } from './pages/LeaveView';
-import { ArrearsView } from './pages/ArrearsView';
-import { IncrementsView } from './pages/IncrementsView';
-import { GpfView } from './pages/GpfView';
-import { ImportsView } from './pages/ImportsView';
-import { PaymentBatchesView } from './pages/PaymentBatchesView';
+import { CompensationView } from './pages/CompensationView';
+import { PayrollProcessingView } from './pages/PayrollProcessingView';
+import { ExpensesView } from './pages/ExpensesView';
+import { OffboardingView } from './pages/OffboardingView';
+import { AssetsHelpDeskView } from './pages/AssetsHelpDeskView';
 import { ReportsView } from './pages/ReportsView';
 import { SelfServiceView } from './pages/SelfServiceView';
+import { LoansView } from './pages/LoansView';
+import { SalaryColumnMasterView } from './pages/SalaryColumnMasterView';
+import { PayrollPermissionsView } from './pages/PayrollPermissionsView';
+import { NotificationBell } from './components/NotificationBell';
+import { AccessDeniedView } from './components/common/AccessDeniedView';
 
 import {
   LayoutDashboard,
   Users,
-  Sliders,
+  Briefcase,
+  Clock,
+  CalendarCheck,
+  Calculator,
   PlayCircle,
   Receipt,
-  Landmark,
-  CalendarCheck,
-  History,
-  TrendingUp,
-  PiggyBank,
-  Upload,
-  CreditCard,
+  LogOut as LogOutIcon,
+  Laptop,
   BarChart3,
   UserCheck,
-  LogOut
+  Power,
+  ChevronRight,
+  ShieldCheck,
+  Shield,
+  Landmark,
+  Layers,
+  ChevronDown,
+  User
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
-  const { user, token, isLoading, logout } = useAuth();
+  const { user, token, isLoading, logout, login, canViewModule } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>('dashboard');
+  const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
 
   if (isLoading) {
     return (
       <div style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', background: 'var(--bg-app)', color: 'var(--text-muted)' }}>
-        Initializing Payroll Management System...
+        Initializing Corporate HRMS & Payroll Suite...
       </div>
     );
   }
@@ -52,119 +62,350 @@ const AppContent: React.FC = () => {
     return <LoginView />;
   }
 
-  const isSelfServiceOnly = user.roles.length === 1 && user.roles.includes('employee_self_service');
+  const isSelfServiceOnly = user.roles.length === 1 && user.roles.includes('employee');
+
+  // Quick Persona Switcher for demonstration & multi-role testing
+  const handleQuickSwitchUser = async (targetUsername: string) => {
+    try {
+      const res: any = await api.post('/auth/login', { username: targetUsername, password: 'Admin@123' });
+      login(res.token, res.user);
+    } catch (err: any) {
+      alert(err.message || 'Failed to switch role');
+    }
+  };
+
+  const getBreadcrumb = () => {
+    switch (currentPage) {
+      case 'dashboard':
+        return { section: 'Overview', page: 'Executive Dashboard' };
+      case 'employees':
+        return { section: 'People', page: 'Employee Directory & Master' };
+      case 'recruitment':
+        return { section: 'People', page: 'Recruitment & Candidate Pipeline' };
+      case 'offboarding':
+        return { section: 'People', page: 'Offboarding & F&F Settlement' };
+      case 'attendance':
+        return { section: 'Time Management', page: 'Shifts & Daily Punches' };
+      case 'leave':
+        return { section: 'Time Management', page: 'Leave Quotas & Approvals' };
+      case 'column-master':
+        return { section: 'Payroll & CTC', page: 'Salary Column Master' };
+      case 'compensation':
+        return { section: 'Payroll & CTC', page: 'Salary Structures & Components' };
+      case 'payroll':
+        return { section: 'Payroll & CTC', page: '7-Stage Payroll Workbench' };
+      case 'expenses':
+        return { section: 'Business Operations', page: 'Reimbursements & Travel Desk' };
+      case 'assets-helpdesk':
+        return { section: 'Business Operations', page: 'Hardware Assets & IT Helpdesk' };
+      case 'reports':
+        return { section: 'Compliance & Reports', page: 'Salary Registers & NEFT Export' };
+      case 'loans':
+        return { section: 'Operations & Finance', page: 'Employee Loans & Salary Advances' };
+      case 'self':
+        return { section: 'Employee Portal', page: 'My Self-Service (ESS)' };
+      case 'payroll-permissions':
+        return { section: 'Access Control', page: 'Payroll Permissions Dashboard' };
+      default:
+        return { section: 'HRMS', page: currentPage };
+    }
+  };
+
+  const breadcrumb = getBreadcrumb();
 
   return (
     <div className="app-layout">
-      {/* Sidebar */}
+      {/* Sidebar Navigation */}
       <aside className="sidebar">
         <div className="sidebar-header">
-          <div className="brand-badge">PM</div>
+          <div className="brand-badge">PF</div>
           <div className="brand-info">
-            <h2>{user.institutionBrand || 'NIHER Payroll'}</h2>
-            <p>Enterprise Edition</p>
+            <h2>PayFlow</h2>
+            <p>Corporate HRMS & Payroll</p>
           </div>
         </div>
 
-        <nav className="sidebar-nav">
-          <div className="nav-section-title">Core Operations</div>
-          <div className={`nav-item ${currentPage === 'dashboard' ? 'active' : ''}`} onClick={() => setCurrentPage('dashboard')}>
-            <LayoutDashboard size={16} /> Overview
-          </div>
-
-          {!isSelfServiceOnly && (
-            <>
-              <div className={`nav-item ${currentPage === 'payroll' ? 'active' : ''}`} onClick={() => setCurrentPage('payroll')}>
-                <PlayCircle size={16} /> Payroll Lifecycle
-              </div>
-              <div className={`nav-item ${currentPage === 'employees' ? 'active' : ''}`} onClick={() => setCurrentPage('employees')}>
-                <Users size={16} /> Employee Directory
-              </div>
-              <div className={`nav-item ${currentPage === 'masters' ? 'active' : ''}`} onClick={() => setCurrentPage('masters')}>
-                <Sliders size={16} /> 7th CPC Masters
-              </div>
-
-              <div className="nav-section-title">Salary Allowances & Dues</div>
-              <div className={`nav-item ${currentPage === 'tax' ? 'active' : ''}`} onClick={() => setCurrentPage('tax')}>
-                <Receipt size={16} /> Income Tax (TDS)
-              </div>
-              <div className={`nav-item ${currentPage === 'loans' ? 'active' : ''}`} onClick={() => setCurrentPage('loans')}>
-                <Landmark size={16} /> Loans & Advances
-              </div>
-              <div className={`nav-item ${currentPage === 'leave' ? 'active' : ''}`} onClick={() => setCurrentPage('leave')}>
-                <CalendarCheck size={16} /> Leave-Linked Pay
-              </div>
-              <div className={`nav-item ${currentPage === 'arrears' ? 'active' : ''}`} onClick={() => setCurrentPage('arrears')}>
-                <History size={16} /> Arrears & Fixation
-              </div>
-              <div className={`nav-item ${currentPage === 'increments' ? 'active' : ''}`} onClick={() => setCurrentPage('increments')}>
-                <TrendingUp size={16} /> Annual Increments
-              </div>
-              <div className={`nav-item ${currentPage === 'gpf' ? 'active' : ''}`} onClick={() => setCurrentPage('gpf')}>
-                <PiggyBank size={16} /> GPF Ledger
-              </div>
-
-              <div className="nav-section-title">Disbursement & Reports</div>
-              <div className={`nav-item ${currentPage === 'imports' ? 'active' : ''}`} onClick={() => setCurrentPage('imports')}>
-                <Upload size={16} /> Bulk Upload Center
-              </div>
-              <div className={`nav-item ${currentPage === 'payments' ? 'active' : ''}`} onClick={() => setCurrentPage('payments')}>
-                <CreditCard size={16} /> Bank Advice Batches
-              </div>
-              <div className={`nav-item ${currentPage === 'reports' ? 'active' : ''}`} onClick={() => setCurrentPage('reports')}>
-                <BarChart3 size={16} /> Reports & Audits
-              </div>
-            </>
-          )}
-
-          <div className="nav-section-title">Self-Service</div>
-          <div className={`nav-item ${currentPage === 'self' ? 'active' : ''}`} onClick={() => setCurrentPage('self')}>
-            <UserCheck size={16} /> My Payslips & Portal
-          </div>
+        <nav className="sidebar-nav" aria-label="Main Application Navigation">
+          {(
+            [
+              {
+                title: 'Overview',
+                items: [
+                  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, permissionKey: 'dashboard' }
+                ]
+              },
+              {
+                title: 'People & Organization',
+                items: [
+                  { id: 'employees', label: 'Employee Master', icon: Users, permissionKey: 'employees', hideForSelfServiceOnly: true },
+                  { id: 'recruitment', label: 'Recruitment & ATS', icon: Briefcase, permissionKey: 'recruitment', hideForSelfServiceOnly: true },
+                  { id: 'offboarding', label: 'Offboarding & F&F', icon: LogOutIcon, permissionKey: 'offboarding', hideForSelfServiceOnly: true }
+                ]
+              },
+              {
+                title: 'Time & Attendance',
+                items: [
+                  { id: 'attendance', label: 'Shifts & Attendance', icon: Clock, permissionKey: 'attendance', hideForSelfServiceOnly: true },
+                  { id: 'leave', label: 'Leave Management', icon: CalendarCheck, permissionKey: 'leave', hideForSelfServiceOnly: true }
+                ]
+              },
+              {
+                title: 'Payroll & Compensation',
+                items: [
+                  { id: 'column-master', label: 'Salary Column Master', icon: Layers, permissionKey: 'column-master', hideForSelfServiceOnly: true },
+                  { id: 'compensation', label: 'Salary Structures (CTC)', icon: Calculator, permissionKey: 'compensation', hideForSelfServiceOnly: true },
+                  { id: 'payroll', label: '7-Stage Payroll Engine', icon: PlayCircle, permissionKey: 'payroll', hideForSelfServiceOnly: true }
+                ]
+              },
+              {
+                title: 'Operations & Finance',
+                items: [
+                  { id: 'loans', label: 'Loans & Advances', icon: Landmark, permissionKey: 'loans', hideForSelfServiceOnly: true },
+                  { id: 'expenses', label: 'Expenses & Travel', icon: Receipt, permissionKey: 'expenses', hideForSelfServiceOnly: true },
+                  { id: 'assets-helpdesk', label: 'Assets & Help Desk', icon: Laptop, permissionKey: 'assets-helpdesk', hideForSelfServiceOnly: true }
+                ]
+              },
+              {
+                title: 'Compliance & Reports',
+                items: [
+                  { id: 'reports', label: 'Registers & NEFT Export', icon: BarChart3, permissionKey: 'reports', hideForSelfServiceOnly: true }
+                ]
+              },
+              {
+                title: 'Self-Service',
+                items: [
+                  { id: 'self', label: 'My Self-Service (ESS)', icon: UserCheck, permissionKey: 'self' },
+                  { id: 'expenses', label: 'My Claims & Expenses', icon: Receipt, permissionKey: 'expenses' }
+                ]
+              },
+              {
+                title: 'Access Control & Admin',
+                items: [
+                  { id: 'payroll-permissions', label: 'Payroll Permissions', icon: Shield, permissionKey: 'rbac', hideForSelfServiceOnly: true }
+                ]
+              }
+            ] as Array<{
+              title: string;
+              items: Array<{
+                id: string;
+                label: string;
+                icon: React.ComponentType<{ size: number }>;
+                permissionKey: string;
+                hideForSelfServiceOnly?: boolean;
+              }>;
+            }>
+          )
+            .map(section => ({
+              ...section,
+              items: section.items.filter(item => {
+                if (item.hideForSelfServiceOnly && isSelfServiceOnly) return false;
+                return canViewModule(item.permissionKey);
+              })
+            }))
+            .filter(section => section.items.length > 0)
+            .map(section => (
+              <React.Fragment key={section.title}>
+                <div className="nav-section-title">{section.title}</div>
+                {section.items.map(item => {
+                  const Icon = item.icon;
+                  const isActive = currentPage === item.id;
+                  return (
+                    <div
+                      key={`${section.title}-${item.id}`}
+                      className={`nav-item ${isActive ? 'active' : ''}`}
+                      role="button"
+                      tabIndex={0}
+                      aria-current={isActive ? 'page' : undefined}
+                      onClick={() => setCurrentPage(item.id)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          setCurrentPage(item.id);
+                        }
+                      }}
+                    >
+                      <Icon size={15} /> {item.label}
+                    </div>
+                  );
+                })}
+              </React.Fragment>
+            ))}
         </nav>
-
-        <div className="sidebar-footer">
-          <div className="user-snippet">
-            <div className="user-avatar">{user.fullName[0]}</div>
-            <div className="user-details">
-              <div className="user-name">{user.fullName}</div>
-              <div className="user-role">{user.roles[0]}</div>
-            </div>
-          </div>
-          <button className="btn btn-outline btn-sm" style={{ width: '100%', justifyContent: 'center' }} onClick={logout}>
-            <LogOut size={14} /> Sign Out
-          </button>
-        </div>
       </aside>
 
-      {/* Main Content Area */}
+      {/* Main Workspace Body */}
       <div className="main-wrapper">
+        {/* Topbar Header */}
         <header className="topbar">
-          <div className="topbar-title">
-            <h1>{currentPage.toUpperCase().replace('-', ' ')}</h1>
+          <div className="topbar-left">
+            <div className="breadcrumb-trail">
+              <span className="breadcrumb-item">{breadcrumb.section}</span>
+              <ChevronRight size={12} />
+              <span className="breadcrumb-current">{breadcrumb.page}</span>
+            </div>
           </div>
-          <div className="topbar-actions">
-            <span className="badge badge-approved" style={{ fontSize: '0.72rem' }}>
-              Connected: PostgreSQL Local
-            </span>
+
+          <div className="topbar-actions" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {/* Live Notification Center */}
+            <NotificationBell onNavigate={(page) => setCurrentPage(page)} />
+
+            {/* Top-Right Profile Menu */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                id="payflow-profile-menu-trigger"
+                onClick={() => setProfileMenuOpen(prev => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  background: 'transparent',
+                  border: '1px solid var(--border-color)',
+                  padding: '4px 10px 4px 6px',
+                  borderRadius: 'var(--radius-md)',
+                  cursor: 'pointer',
+                  color: 'var(--text-main)',
+                  fontSize: '0.8125rem',
+                  fontWeight: 500
+                }}
+              >
+                <div
+                  style={{
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: '50%',
+                    background: 'var(--primary)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '0.75rem',
+                    fontWeight: 700
+                  }}
+                >
+                  {user.fullName ? user.fullName[0].toUpperCase() : 'U'}
+                </div>
+                <span>{user.fullName}</span>
+                <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
+              </button>
+
+              {profileMenuOpen && (
+                <>
+                  <div
+                    style={{ position: 'fixed', inset: 0, zIndex: 998 }}
+                    onClick={() => setProfileMenuOpen(false)}
+                  />
+                  <div
+                    id="payflow-profile-dropdown"
+                    style={{
+                      position: 'absolute',
+                      right: 0,
+                      top: 'calc(100% + 6px)',
+                      width: '220px',
+                      background: '#ffffff',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: 'var(--radius-md)',
+                      boxShadow: 'var(--shadow-lg)',
+                      zIndex: 999,
+                      overflow: 'hidden'
+                    }}
+                  >
+                    <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-subtle)' }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.8125rem', color: 'var(--text-main)' }}>{user.fullName}</div>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                        {user.roles[0]?.replace('_', ' ') ?? 'Employee'}
+                      </div>
+                    </div>
+                    <div style={{ padding: '4px' }}>
+                      <button
+                        type="button"
+                        id="payflow-my-profile-btn"
+                        onClick={() => {
+                          setCurrentPage('self');
+                          setProfileMenuOpen(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--text-main)',
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--bg-subtle)')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <User size={14} style={{ color: 'var(--primary)' }} />
+                        <span>My Profile</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="payflow-logout-btn"
+                        onClick={() => {
+                          setProfileMenuOpen(false);
+                          logout();
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '8px 10px',
+                          borderRadius: 'var(--radius-sm)',
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--danger)',
+                          fontSize: '0.8125rem',
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = '#fef2f2')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                      >
+                        <LogOutIcon size={14} />
+                        <span>Log out</span>
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </header>
 
+        {/* Dynamic Page Content with Route Guard */}
         <main className="content-body">
-          {currentPage === 'dashboard' && <DashboardView onNavigate={setCurrentPage} />}
-          {currentPage === 'employees' && <EmployeesView />}
-          {currentPage === 'masters' && <MastersView />}
-          {currentPage === 'payroll' && <PayrollProcessingView />}
-          {currentPage === 'tax' && <TaxView />}
-          {currentPage === 'loans' && <LoansView />}
-          {currentPage === 'leave' && <LeaveView />}
-          {currentPage === 'arrears' && <ArrearsView />}
-          {currentPage === 'increments' && <IncrementsView />}
-          {currentPage === 'gpf' && <GpfView />}
-          {currentPage === 'imports' && <ImportsView />}
-          {currentPage === 'payments' && <PaymentBatchesView />}
-          {currentPage === 'reports' && <ReportsView />}
-          {currentPage === 'self' && <SelfServiceView />}
+          {!canViewModule(currentPage) ? (
+            <AccessDeniedView
+              moduleName={breadcrumb.page}
+              requiredPermission={`module:${currentPage}`}
+              onNavigate={(page) => setCurrentPage(page)}
+            />
+          ) : (
+            <>
+              {currentPage === 'dashboard' && <DashboardView onNavigate={setCurrentPage} />}
+              {currentPage === 'employees' && <EmployeesView />}
+              {currentPage === 'recruitment' && <RecruitmentView />}
+              {currentPage === 'offboarding' && <OffboardingView />}
+              {currentPage === 'attendance' && <AttendanceView />}
+              {currentPage === 'leave' && <LeaveView />}
+              {currentPage === 'column-master' && <SalaryColumnMasterView onNavigateToStructures={() => setCurrentPage('compensation')} />}
+              {currentPage === 'compensation' && <CompensationView />}
+              {currentPage === 'payroll' && <PayrollProcessingView />}
+              {currentPage === 'loans' && <LoansView />}
+              {currentPage === 'expenses' && <ExpensesView />}
+              {currentPage === 'assets-helpdesk' && <AssetsHelpDeskView />}
+              {currentPage === 'reports' && <ReportsView />}
+              {currentPage === 'self' && <SelfServiceView onNavigate={setCurrentPage} />}
+              {currentPage === 'payroll-permissions' && <PayrollPermissionsView />}
+            </>
+          )}
         </main>
       </div>
     </div>

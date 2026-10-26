@@ -1,4 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
@@ -6,6 +7,7 @@ import { prisma } from '../../config/db.js';
 import { ENV } from '../../config/env.js';
 import { AppError } from '../../middleware/errorHandler.js';
 import { authenticate, recordAudit } from '../../middleware/auth.js';
+import { getEffectivePermissionsForUser } from '../rbac/rbac.service.js';
 
 export const authRouter = Router();
 
@@ -26,11 +28,10 @@ authRouter.post('/login', async (req: Request, res: Response, next: NextFunction
         ]
       },
       include: {
-        institution: true,
+        company: true,
         userRoles: {
           include: {
-            role: true,
-            ou: true
+            role: true
           }
         },
         employee: {
@@ -39,9 +40,10 @@ authRouter.post('/login', async (req: Request, res: Response, next: NextFunction
             employeeCode: true,
             firstName: true,
             lastName: true,
-            email: true,
-            ouId: true,
-            departmentId: true
+            workEmail: true,
+            departmentId: true,
+            branchId: true,
+            designationId: true
           }
         }
       }
@@ -56,34 +58,42 @@ authRouter.post('/login', async (req: Request, res: Response, next: NextFunction
       throw new AppError('Invalid username or password', 401, 'INVALID_CREDENTIALS');
     }
 
-    // Update lastLoginAt
+    // Generate unique active session ID
+    const sessionId = crypto.randomUUID();
+
+    // Update lastLoginAt and activeSessionId (invalidating any prior active session)
     await prisma.user.update({
       where: { id: user.id },
-      data: { lastLoginAt: new Date() }
+      data: {
+        lastLoginAt: new Date(),
+        activeSessionId: sessionId
+      }
     });
 
     const token = jwt.sign(
       {
         userId: user.id,
-        institutionId: user.institutionId,
-        username: user.username
+        companyId: user.companyId,
+        username: user.username,
+        sessionId
       },
       ENV.JWT_SECRET,
       { expiresIn: '12h' }
     );
 
-    const roles = user.userRoles.map(ur => ur.role.code);
-    const primaryRole = roles[0] ?? 'employee_self_service';
+    const roles = user.userRoles.map(ur => ur.role.name);
+    const primaryRole = roles[0] ?? 'employee';
+    const permissions = await getEffectivePermissionsForUser(user.id);
 
     // Audit log
     await prisma.auditLog.create({
       data: {
-        institutionId: user.institutionId,
+        companyId: user.companyId,
         userId: user.id,
         action: 'LOGIN',
         entityType: 'User',
         entityId: user.id,
-        details: { username: user.username, roles },
+        metadata: { username: user.username, roles },
         ipAddress: req.ip ?? req.socket.remoteAddress
       }
     });
@@ -92,15 +102,16 @@ authRouter.post('/login', async (req: Request, res: Response, next: NextFunction
       token,
       user: {
         id: user.id,
-        institutionId: user.institutionId,
-        institutionName: user.institution.name,
-        institutionBrand: user.institution.brandName ?? user.institution.name,
-        institutionLogo: user.institution.logoUrl,
+        companyId: user.companyId,
+        companyName: user.company.name,
+        companyBrand: user.company.brandName ?? user.company.name,
+        companyCode: user.company.code,
         username: user.username,
         fullName: user.fullName,
         email: user.email,
         roles,
         primaryRole,
+        permissions,
         employee: user.employee
       }
     });
@@ -114,39 +125,42 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response, next: Ne
     const user = await prisma.user.findUnique({
       where: { id: req.user!.userId },
       include: {
-        institution: true,
+        company: true,
         userRoles: {
           include: {
-            role: true,
-            ou: true
+            role: true
           }
         },
         employee: {
           include: {
-            designation: true,
             department: true,
-            ou: true
+            designation: true,
+            branch: true
           }
         }
       }
     });
 
     if (!user) {
-      throw new AppError('User not found', 404, 'USER_NOT_FOUND');
+      throw new AppError('User not found', 404, 'NOT_FOUND');
     }
+
+    const roles = user.userRoles.map(ur => ur.role.name);
+    const permissions = req.user?.permissions || await getEffectivePermissionsForUser(user.id);
 
     res.status(200).json({
       user: {
         id: user.id,
-        institutionId: user.institutionId,
-        institutionName: user.institution.name,
-        institutionBrand: user.institution.brandName ?? user.institution.name,
-        institutionLogo: user.institution.logoUrl,
+        companyId: user.companyId,
+        companyName: user.company.name,
+        companyBrand: user.company.brandName ?? user.company.name,
+        companyCode: user.company.code,
         username: user.username,
         fullName: user.fullName,
         email: user.email,
-        roles: user.userRoles.map(ur => ur.role.code),
-        scopedOus: user.userRoles.map(ur => ur.ou).filter(Boolean),
+        roles,
+        primaryRole: roles[0] ?? 'employee',
+        permissions,
         employee: user.employee
       }
     });
@@ -155,35 +169,16 @@ authRouter.get('/me', authenticate, async (req: Request, res: Response, next: Ne
   }
 });
 
-const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1),
-  newPassword: z.string().min(6, 'Password must be at least 6 characters')
-});
-
-authRouter.post('/change-password', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+authRouter.post('/logout', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
-
-    const user = await prisma.user.findUnique({
-      where: { id: req.user!.userId }
-    });
-
-    if (!user) throw new AppError('User not found', 404);
-
-    const isMatch = await bcrypt.compare(currentPassword, user.passwordHash);
-    if (!isMatch) {
-      throw new AppError('Current password does not match', 400, 'PASSWORD_MISMATCH');
+    if (req.user?.userId) {
+      await prisma.user.update({
+        where: { id: req.user.userId },
+        data: { activeSessionId: null }
+      });
     }
-
-    const newHash = await bcrypt.hash(newPassword, 10);
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { passwordHash: newHash }
-    });
-
-    await recordAudit(req, 'CHANGE_PASSWORD', 'User', user.id);
-
-    res.status(200).json({ message: 'Password changed successfully' });
+    await recordAudit(req, 'LOGOUT', 'User', req.user!.userId);
+    res.status(200).json({ message: 'Logged out successfully' });
   } catch (error) {
     next(error);
   }

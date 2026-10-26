@@ -1,679 +1,841 @@
-import { PrismaClient, CadreType, EmploymentType, OuType, SalaryHeadType, CalculationType, TaxRegime, PaymentMethod } from '@prisma/client';
+import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('Seeding Payroll Management System master data...');
+  const env = process.env.NODE_ENV || 'development';
+  console.log(`🌱 Starting Corporate HRMS & Payroll database seed [Environment: ${env}]...`);
 
-  const passwordHash = await bcrypt.hash('Admin@123', 10);
+  if (env === 'production') {
+    console.log('🔒 Production Mode: Only initializing master reference entities and administrative access.');
+    console.log('🔒 Production Safety: Destructive resets, mock employee fixtures, fake attendance, and demo runs are strictly prohibited.');
+  }
+
+  const defaultPasswordHash = await bcrypt.hash('Admin@123', 10);
 
   // 1. Roles
-  const roles = [
-    { code: 'payroll_admin', name: 'Payroll Administrator', description: 'Complete system administration and configuration' },
-    { code: 'payroll_admin_view', name: 'Payroll Admin View', description: 'Read-only access to payroll data and reports' },
-    { code: 'payroll_ou_admin', name: 'OU Payroll Administrator', description: 'Organizational unit scoped payroll administrator' },
-    { code: 'payroll_pcm', name: 'Payroll Change Manager', description: 'Configures salary components and updates assignments' },
-    { code: 'payroll_pda', name: 'Payroll Dealing Assistant', description: 'Generates individual and bulk payroll runs' },
-    { code: 'payroll_pvo', name: 'Payroll Verifying Officer', description: 'Verifies generated payroll and validates exceptions' },
-    { code: 'payroll_pfo', name: 'Payroll Finalizing Officer', description: 'Freezes calculation snapshots and finalizes payroll' },
-    { code: 'payroll_ar_salary', name: 'Payroll Approving Officer', description: 'Approves finalized payroll runs for payment' },
-    { code: 'payroll_incometax_admin', name: 'Income Tax Administrator', description: 'Manages tax slabs, rules, declarations and TDS' },
-    { code: 'employee_self_service', name: 'Employee Self Service', description: 'Self-service access for payslips and declarations' },
-    { code: 'platform_admin', name: 'Platform Administrator', description: 'Technical configuration and audit monitoring' }
+  const roleNames = [
+    'platform_admin',
+    'company_admin',
+    'hr_manager',
+    'hr_executive',
+    'payroll_admin',
+    'payroll_processor',
+    'finance_admin',
+    'department_manager',
+    'employee',
+    'recruiter',
+    'asset_manager',
+    'security_desk'
   ];
 
-  for (const r of roles) {
-    await prisma.role.upsert({
-      where: { code: r.code },
-      update: { name: r.name, description: r.description },
-      create: r
+  const roleMap = new Map<string, string>();
+  for (const name of roleNames) {
+    const role = await prisma.role.upsert({
+      where: { name },
+      update: {},
+      create: { name, description: `Corporate role for ${name.replace('_', ' ')}` }
     });
+    roleMap.set(name, role.id);
   }
-  console.log('✓ Roles seeded');
 
-  // 2. Institution
-  const institution = await prisma.institution.upsert({
-    where: { code: 'NIHER' },
+  // 2. Company / Legal Entity
+  const company = await prisma.company.upsert({
+    where: { code: 'APEX' },
     update: {},
     create: {
-      code: 'NIHER',
-      name: 'National Institute of Higher Education & Research',
-      brandName: 'NIHER Central Payroll',
-      contactEmail: 'payroll@niher.edu.in',
+      code: 'APEX',
+      name: 'Apex Global Technologies Pvt. Ltd.',
+      brandName: 'Apex Global',
+      legalName: 'Apex Global Technologies Private Limited',
+      cinNumber: 'U72200MH2015PTC268491',
+      gstin: '27AABCA1234F1Z8',
+      panNumber: 'AABCA1234F',
+      tanNumber: 'MUMA12345F',
+      pfEstablishmentCode: 'MH/BAN/0045892/000',
+      esicCode: '31000458920000101',
+      ptrcNumber: '27654321098P',
+      contactEmail: 'contact@apexglobal.tech',
+      contactPhone: '+91 22 6123 4567',
+      website: 'https://apexglobal.tech',
       currency: 'INR',
-      currencySymbol: '₹'
+      active: true
     }
   });
 
-  // Settings
-  const defaultSettings = [
-    { key: 'mask_pan', value: 'true', description: 'Mask employee PAN on public views and payslips' },
-    { key: 'mask_bank', value: 'true', description: 'Mask bank account number except last 4 digits' },
-    { key: 'show_employer_contributions', value: 'true', description: 'Show employer NPS/EPF contributions on payslip' },
-    { key: 'allow_self_approval', value: 'false', description: 'Strict separation of duties between generation and approval' },
-    { key: 'currency_code', value: 'INR', description: 'Default currency symbol and code' }
-  ];
-
-  for (const s of defaultSettings) {
-    await prisma.institutionSetting.upsert({
-      where: { institutionId_key: { institutionId: institution.id, key: s.key } },
-      update: { value: s.value },
-      create: { institutionId: institution.id, key: s.key, value: s.value, description: s.description }
-    });
+  const existingBranches = await prisma.branch.count({ where: { companyId: company.id } });
+  if (existingBranches > 0) {
+    if (env === 'production') {
+      console.log('🔒 Production Safety Mode: Master data and company entities already exist. No destructive actions taken.');
+    } else {
+      console.log('ℹ️ Database already contains seeded master data. Preserving existing records without duplicate insertions.');
+    }
+    return;
   }
 
-  // 3. Organizational Units
-  const mainCampus = await prisma.organizationalUnit.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'MAIN_CAMPUS' } },
-    update: {},
-    create: {
-      institutionId: institution.id,
-      code: 'MAIN_CAMPUS',
-      name: 'Main University Campus',
-      type: OuType.CAMPUS
+  // 3. Branches
+  const bHeadquarters = await prisma.branch.create({
+    data: {
+      companyId: company.id,
+      code: 'MUM-HQ',
+      name: 'Mumbai Headquarters',
+      state: 'Maharashtra',
+      city: 'Mumbai',
+      address: 'Level 14, Platina Tower, Bandra Kurla Complex',
+      pinCode: '400051',
+      isHeadquarters: true
     }
   });
 
-  const engFaculty = await prisma.organizationalUnit.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'FAC_ENG' } },
-    update: {},
-    create: {
-      institutionId: institution.id,
-      code: 'FAC_ENG',
-      name: 'Faculty of Engineering & Technology',
-      type: OuType.FACULTY,
-      parentOuId: mainCampus.id
+  const bBengaluru = await prisma.branch.create({
+    data: {
+      companyId: company.id,
+      code: 'BLR-TECH',
+      name: 'Bengaluru Tech Center',
+      state: 'Karnataka',
+      city: 'Bengaluru',
+      address: 'Tower B, RMZ Ecoworld, Outer Ring Road',
+      pinCode: '560103',
+      isHeadquarters: false
     }
   });
 
-  const sciFaculty = await prisma.organizationalUnit.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'FAC_SCI' } },
-    update: {},
-    create: {
-      institutionId: institution.id,
-      code: 'FAC_SCI',
-      name: 'Faculty of Sciences',
-      type: OuType.FACULTY,
-      parentOuId: mainCampus.id
+  const bPune = await prisma.branch.create({
+    data: {
+      companyId: company.id,
+      code: 'PUN-DEL',
+      name: 'Pune Delivery Center',
+      state: 'Maharashtra',
+      city: 'Pune',
+      address: 'Quadron Business Park, Hinjawadi Phase 2',
+      pinCode: '411057',
+      isHeadquarters: false
     }
   });
 
   // 4. Departments
-  const deptCse = await prisma.department.upsert({
-    where: { ouId_code: { ouId: engFaculty.id, code: 'CSE' } },
-    update: {},
-    create: { ouId: engFaculty.id, code: 'CSE', name: 'Computer Science and Engineering' }
+  const deptEng = await prisma.department.create({
+    data: { companyId: company.id, code: 'ENG', name: 'Software Engineering' }
   });
-
-  const deptMech = await prisma.department.upsert({
-    where: { ouId_code: { ouId: engFaculty.id, code: 'MECH' } },
-    update: {},
-    create: { ouId: engFaculty.id, code: 'MECH', name: 'Mechanical Engineering' }
+  const deptPrd = await prisma.department.create({
+    data: { companyId: company.id, code: 'PRD', name: 'Product & Design' }
   });
-
-  const deptPhysics = await prisma.department.upsert({
-    where: { ouId_code: { ouId: sciFaculty.id, code: 'PHYSICS' } },
-    update: {},
-    create: { ouId: sciFaculty.id, code: 'PHYSICS', name: 'Department of Physics' }
+  const deptHr = await prisma.department.create({
+    data: { companyId: company.id, code: 'HR', name: 'People & Culture (HR)' }
   });
-
-  const deptAdmin = await prisma.department.upsert({
-    where: { ouId_code: { ouId: mainCampus.id, code: 'FINANCE' } },
-    update: {},
-    create: { ouId: mainCampus.id, code: 'FINANCE', name: 'Finance and Accounts Section' }
+  const deptFin = await prisma.department.create({
+    data: { companyId: company.id, code: 'FIN', name: 'Finance & Accounts' }
   });
 
   // 5. Designations
-  const designations = [
-    { code: 'PROF', name: 'Professor', cadre: CadreType.TEACHING },
-    { code: 'ASSOC_PROF', name: 'Associate Professor', cadre: CadreType.TEACHING },
-    { code: 'ASST_PROF', name: 'Assistant Professor', cadre: CadreType.TEACHING },
-    { code: 'REGISTRAR', name: 'Registrar', cadre: CadreType.ADMINISTRATIVE },
-    { code: 'FIN_OFFICER', name: 'Finance Officer', cadre: CadreType.ADMINISTRATIVE },
-    { code: 'SEC_OFFICER', name: 'Section Officer', cadre: CadreType.ADMINISTRATIVE },
-    { code: 'JR_ASST', name: 'Junior Assistant', cadre: CadreType.NON_TEACHING }
-  ];
-
-  const desigMap: Record<string, string> = {};
-  for (const d of designations) {
-    const record = await prisma.designation.upsert({
-      where: { institutionId_code: { institutionId: institution.id, code: d.code } },
-      update: {},
-      create: { institutionId: institution.id, code: d.code, name: d.name, cadre: d.cadre }
-    });
-    desigMap[d.code] = record.id;
-  }
-
-  // 6. Employee Groups
-  const groupA = await prisma.employeeGroup.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'GRP_A' } },
-    update: {},
-    create: { institutionId: institution.id, code: 'GRP_A', name: 'Group A (Officers & Faculty)' }
+  const desVp = await prisma.designation.create({
+    data: { companyId: company.id, code: 'VPE', name: 'Vice President of Engineering' }
+  });
+  const desLeadDes = await prisma.designation.create({
+    data: { companyId: company.id, code: 'LPD', name: 'Lead Product Designer' }
+  });
+  const desSrEng = await prisma.designation.create({
+    data: { companyId: company.id, code: 'SSE', name: 'Senior Software Engineer' }
+  });
+  const desHrMgr = await prisma.designation.create({
+    data: { companyId: company.id, code: 'HRM', name: 'Senior HR Manager' }
+  });
+  const desFinMgr = await prisma.designation.create({
+    data: { companyId: company.id, code: 'FM', name: 'Finance Controller' }
   });
 
-  const groupB = await prisma.employeeGroup.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'GRP_B' } },
-    update: {},
-    create: { institutionId: institution.id, code: 'GRP_B', name: 'Group B (Gazetted/Technical)' }
+  // 6. Job Bands
+  const bandL1 = await prisma.jobBand.create({
+    data: { companyId: company.id, code: 'L1', name: 'Associate Level', minCtc: 400000, maxCtc: 800000 }
+  });
+  const bandL2 = await prisma.jobBand.create({
+    data: { companyId: company.id, code: 'L2', name: 'Senior Specialist', minCtc: 800000, maxCtc: 1600000 }
+  });
+  const bandL3 = await prisma.jobBand.create({
+    data: { companyId: company.id, code: 'L3', name: 'Principal / Lead', minCtc: 1600000, maxCtc: 3000000 }
+  });
+  const bandL4 = await prisma.jobBand.create({
+    data: { companyId: company.id, code: 'L4', name: 'Director / VP', minCtc: 3000000, maxCtc: 6500000 }
   });
 
-  const groupC = await prisma.employeeGroup.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'GRP_C' } },
-    update: {},
-    create: { institutionId: institution.id, code: 'GRP_C', name: 'Group C (Administrative & Clerical)' }
+  // 7. Cost Centers
+  const ccRnd = await prisma.costCenter.create({
+    data: { companyId: company.id, code: 'CC-RND', name: 'R&D Product Engineering' }
+  });
+  const ccGna = await prisma.costCenter.create({
+    data: { companyId: company.id, code: 'CC-GNA', name: 'General & Administrative' }
   });
 
-  // Managed Payroll Groups
-  const payrollGroupTeaching = await prisma.managedPayrollGroup.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'REGULAR_TEACHING' } },
-    update: {},
-    create: { institutionId: institution.id, code: 'REGULAR_TEACHING', name: 'Regular Faculty Payroll', description: 'Faculty on 7th CPC academic pay scale' }
-  });
-
-  const payrollGroupStaff = await prisma.managedPayrollGroup.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: 'REGULAR_NON_TEACHING' } },
-    update: {},
-    create: { institutionId: institution.id, code: 'REGULAR_NON_TEACHING', name: 'Regular Administrative Staff', description: 'Staff on 7th CPC ministerial pay scale' }
-  });
-
-  // 7. Financial Years & Periods
-  const fy2026 = await prisma.financialYear.upsert({
-    where: { institutionId_name: { institutionId: institution.id, name: '2026-2027' } },
-    update: { active: true },
-    create: {
-      institutionId: institution.id,
-      name: '2026-2027',
-      startsOn: new Date('2026-04-01T00:00:00Z'),
-      endsOn: new Date('2027-03-31T23:59:59Z'),
-      active: true,
-      isClosed: false
+  // 8. Statutory Configuration & PT Slabs
+  await prisma.statutoryConfig.create({
+    data: {
+      companyId: company.id,
+      pfWageCeiling: 15000,
+      pfEmployeePct: 12.0,
+      pfEmployerEpfsPct: 3.67,
+      pfEmployerEpsPct: 8.33,
+      esicWageCeiling: 21000,
+      esicEmployeePct: 0.75,
+      esicEmployerPct: 3.25,
+      gratuityPct: 4.81
     }
   });
 
-  const monthNames = [
-    'April 2026', 'May 2026', 'June 2026', 'July 2026', 'August 2026', 'September 2026',
-    'October 2026', 'November 2026', 'December 2026', 'January 2027', 'February 2027', 'March 2027'
-  ];
+  // Maharashtra PT Slabs
+  await prisma.professionalTaxSlab.createMany({
+    data: [
+      { state: 'Maharashtra', minSalary: 0, maxSalary: 7500, monthlyAmount: 0 },
+      { state: 'Maharashtra', minSalary: 7501, maxSalary: 10000, monthlyAmount: 175 },
+      { state: 'Maharashtra', minSalary: 10001, maxSalary: null, monthlyAmount: 200, februaryAmount: 300 },
+      { state: 'Karnataka', minSalary: 0, maxSalary: 24999, monthlyAmount: 0 },
+      { state: 'Karnataka', minSalary: 25000, maxSalary: null, monthlyAmount: 200 }
+    ]
+  });
 
-  const periodMap: Record<number, string> = {};
-  for (let m = 0; m < 12; m++) {
-    const pNum = m + 1;
-    const year = m < 9 ? 2026 : 2027;
-    const calMonth = (m + 3) % 12; // 3 = April, 11 = Dec, 0 = Jan, 2 = March
-    const startDate = new Date(Date.UTC(year, calMonth, 1));
-    const nextMonth = new Date(Date.UTC(year, calMonth + 1, 1));
-    const endDate = new Date(nextMonth.getTime() - 1);
-    const payDate = new Date(Date.UTC(year, calMonth + 1, 1)); // 1st of next month
+  // 9. Salary Components
+  const cBasic = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'BASIC', name: 'Basic Salary', type: 'EARNING', category: 'FIXED_EARNING', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'CTC', percentageValue: 40.0, isTaxable: true, isPfGross: true, isEsicGross: true, isPtGross: true, displayOrder: 1 }
+  });
+  const cHra = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'HRA', name: 'House Rent Allowance (HRA)', type: 'EARNING', category: 'FIXED_EARNING', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'BASIC', percentageValue: 50.0, isTaxable: true, isPfGross: false, isEsicGross: true, isPtGross: true, displayOrder: 2 }
+  });
+  const cSpl = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'SPECIAL_ALLOWANCE', name: 'Special Allowance', type: 'EARNING', category: 'FIXED_EARNING', calculationMode: 'FIXED_AMOUNT', isTaxable: true, isPfGross: false, isEsicGross: true, isPtGross: true, displayOrder: 3 }
+  });
+  const cConv = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'CONVEYANCE', name: 'Conveyance Allowance', type: 'EARNING', category: 'FIXED_EARNING', calculationMode: 'FIXED_AMOUNT', fixedAmount: 5000, isTaxable: true, isPfGross: false, isEsicGross: true, isPtGross: true, displayOrder: 4 }
+  });
+  const cMed = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'MEDICAL', name: 'Medical Allowance', type: 'EARNING', category: 'FIXED_EARNING', calculationMode: 'FIXED_AMOUNT', fixedAmount: 5000, isTaxable: true, isPfGross: false, isEsicGross: true, isPtGross: true, displayOrder: 5 }
+  });
+  const cVar = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'VARIABLE_PAY', name: 'Performance Bonus', type: 'EARNING', category: 'VARIABLE_EARNING', calculationMode: 'FIXED_AMOUNT', isTaxable: true, isPfGross: false, isEsicGross: true, isPtGross: true, displayOrder: 6 }
+  });
 
-    const period = await prisma.payrollPeriod.upsert({
-      where: { financialYearId_periodNumber: { financialYearId: fy2026.id, periodNumber: pNum } },
-      update: {},
-      create: {
-        financialYearId: fy2026.id,
-        periodNumber: pNum,
-        name: monthNames[m],
-        startDate,
-        endDate,
-        payDate,
-        status: m === 0 ? 'OPEN' : 'OPEN'
+  // Deductions
+  const cPfEmp = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'EPF_EMPLOYEE', name: 'Employee Provident Fund (12%)', type: 'DEDUCTION', category: 'STATUTORY_DEDUCTION', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'BASIC', percentageValue: 12.0, isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 10 }
+  });
+  const cEsiEmp = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'ESIC_EMPLOYEE', name: 'Employee ESIC (0.75%)', type: 'DEDUCTION', category: 'STATUTORY_DEDUCTION', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'GROSS', percentageValue: 0.75, isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 11 }
+  });
+  const cPt = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'PROFESSIONAL_TAX', name: 'Professional Tax', type: 'DEDUCTION', category: 'STATUTORY_DEDUCTION', calculationMode: 'FIXED_AMOUNT', isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 12 }
+  });
+  const cTds = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'TDS', name: 'Income Tax (TDS)', type: 'DEDUCTION', category: 'STATUTORY_DEDUCTION', calculationMode: 'FIXED_AMOUNT', isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 13 }
+  });
+
+  // Employer Statutory
+  const cPfEmpr = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'EPF_EMPLOYER', name: 'Employer PF Contribution (12%)', type: 'EMPLOYER_STATUTORY', category: 'EMPLOYER_CONTRIBUTION', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'BASIC', percentageValue: 12.0, isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 20 }
+  });
+  const cEsiEmpr = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'ESIC_EMPLOYER', name: 'Employer ESIC (3.25%)', type: 'EMPLOYER_STATUTORY', category: 'EMPLOYER_CONTRIBUTION', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'GROSS', percentageValue: 3.25, isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 21 }
+  });
+  const cGrat = await prisma.salaryComponent.create({
+    data: { companyId: company.id, code: 'GRATUITY', name: 'Gratuity Provision (4.81%)', type: 'EMPLOYER_STATUTORY', category: 'EMPLOYER_CONTRIBUTION', calculationMode: 'PERCENTAGE_OF_COMPONENT', baseComponentCode: 'BASIC', percentageValue: 4.81, isTaxable: false, isPfGross: false, isEsicGross: false, isPtGross: false, displayOrder: 22 }
+  });
+
+  // Salary Structure Templates
+  const templateStandard = await prisma.salaryTemplate.create({
+    data: {
+      companyId: company.id,
+      code: 'TECH-STD-L2',
+      name: 'Engineering Professional Standard Band',
+      description: 'Standard salary structure for Tech Center software engineers with PF and statutory allowances',
+      version: 1,
+      isDefault: true,
+      lines: {
+        create: [
+          { componentId: cBasic.id, calculationMode: 'PERCENTAGE_OF_COMPONENT', percentageOfBasic: 40.0, percentageValue: 40.0, displayOrder: 1 },
+          { componentId: cHra.id, calculationMode: 'PERCENTAGE_OF_COMPONENT', percentageOfBasic: 50.0, percentageValue: 50.0, baseComponentCode: 'BASIC', displayOrder: 2 },
+          { componentId: cConv.id, calculationMode: 'FIXED_AMOUNT', fixedAmount: 5000, displayOrder: 3 },
+          { componentId: cMed.id, calculationMode: 'FIXED_AMOUNT', fixedAmount: 5000, displayOrder: 4 },
+          { componentId: cSpl.id, calculationMode: 'FIXED_AMOUNT', displayOrder: 5 },
+          { componentId: cPfEmp.id, calculationMode: 'PERCENTAGE_OF_COMPONENT', percentageValue: 12.0, baseComponentCode: 'BASIC', displayOrder: 10 },
+          { componentId: cPt.id, calculationMode: 'FIXED_AMOUNT', displayOrder: 11 },
+          { componentId: cTds.id, calculationMode: 'FIXED_AMOUNT', displayOrder: 12 },
+          { componentId: cPfEmpr.id, calculationMode: 'PERCENTAGE_OF_COMPONENT', percentageValue: 12.0, baseComponentCode: 'BASIC', displayOrder: 20 },
+          { componentId: cGrat.id, calculationMode: 'PERCENTAGE_OF_COMPONENT', percentageValue: 4.81, baseComponentCode: 'BASIC', displayOrder: 21 }
+        ]
       }
-    });
-    periodMap[pNum] = period.id;
-  }
-  console.log('✓ Financial Year 2026-2027 and 12 periods seeded');
-
-  // 8. 7th CPC Pay Levels and Pay Matrix Cells
-  const payLevelConfigs = [
-    { level: 4, name: 'Level 4 (GP 2400)', startAmount: 25500, count: 10, stepRate: 0.03 },
-    { level: 7, name: 'Level 7 (GP 4600)', startAmount: 44900, count: 10, stepRate: 0.03 },
-    { level: 10, name: 'Level 10 (Assistant Professor)', startAmount: 57700, count: 15, stepRate: 0.03 },
-    { level: 11, name: 'Level 11 (Senior Asst Prof)', startAmount: 68900, count: 15, stepRate: 0.03 },
-    { level: 12, name: 'Level 12 (Associate Professor)', startAmount: 79800, count: 15, stepRate: 0.03 },
-    { level: 13, name: 'Level 13A (Professor)', startAmount: 131400, count: 15, stepRate: 0.03 },
-    { level: 14, name: 'Level 14 (Senior Professor / Registrar)', startAmount: 144200, count: 15, stepRate: 0.03 }
-  ];
-
-  const payLevelMap: Record<number, string> = {};
-  const firstCellMap: Record<number, string> = {};
-
-  for (const pl of payLevelConfigs) {
-    const levelRecord = await prisma.payLevel.upsert({
-      where: { institutionId_levelNumber: { institutionId: institution.id, levelNumber: pl.level } },
-      update: { name: pl.name },
-      create: { institutionId: institution.id, levelNumber: pl.level, name: pl.name }
-    });
-    payLevelMap[pl.level] = levelRecord.id;
-
-    let currentVal = pl.startAmount;
-    for (let c = 1; c <= pl.count; c++) {
-      const roundedAmount = Math.round(currentVal / 100) * 100;
-      const cell = await prisma.payMatrixCell.upsert({
-        where: { payLevelId_indexNumber: { payLevelId: levelRecord.id, indexNumber: c } },
-        update: { basicAmount: roundedAmount },
-        create: { payLevelId: levelRecord.id, indexNumber: c, basicAmount: roundedAmount }
-      });
-      if (c === 1) firstCellMap[pl.level] = cell.id;
-      currentVal = currentVal * (1 + pl.stepRate);
-    }
-  }
-  console.log('✓ 7th CPC Pay Levels & Pay Matrix cells seeded');
-
-  // 9. Salary Heads
-  const salaryHeadsData = [
-    { code: 'BASIC', name: 'Basic Pay', type: SalaryHeadType.EARNING, calc: CalculationType.FIXED, isTaxable: true, isLeave: true },
-    { code: 'DA', name: 'Dearness Allowance (50%)', type: SalaryHeadType.EARNING, calc: CalculationType.PERCENTAGE_OF_HEAD, isTaxable: true, isLeave: true, config: { baseHead: 'BASIC', percentage: 50.0 } },
-    { code: 'HRA', name: 'House Rent Allowance (27% X-City)', type: SalaryHeadType.EARNING, calc: CalculationType.PERCENTAGE_OF_HEAD, isTaxable: true, isLeave: false, config: { baseHead: 'BASIC', percentage: 27.0 } },
-    { code: 'TA', name: 'Transport Allowance', type: SalaryHeadType.EARNING, calc: CalculationType.FIXED, isTaxable: true, isLeave: false, config: { fixedAmount: 7200 } },
-    { code: 'NPA', name: 'Non-Practicing Allowance', type: SalaryHeadType.EARNING, calc: CalculationType.FIXED, isTaxable: true, isLeave: true },
-    { code: 'SPECIAL_PAY', name: 'Special Allowance', type: SalaryHeadType.EARNING, calc: CalculationType.FIXED, isTaxable: true, isLeave: false },
-    { code: 'EPF', name: 'Employees Provident Fund', type: SalaryHeadType.DEDUCTION, calc: CalculationType.PERCENTAGE_OF_HEAD, isTaxable: false, isLeave: false, config: { baseHead: 'BASIC', percentage: 12.0 } },
-    { code: 'GPF', name: 'General Provident Fund Subscription', type: SalaryHeadType.DEDUCTION, calc: CalculationType.FIXED, isTaxable: false, isLeave: false },
-    { code: 'NPS_TIER1', name: 'NPS Employee Tier 1 (10% Basic+DA)', type: SalaryHeadType.DEDUCTION, calc: CalculationType.PERCENTAGE_OF_HEAD, isTaxable: false, isLeave: false, config: { baseHead: 'BASIC_PLUS_DA', percentage: 10.0 } },
-    { code: 'TDS', name: 'Income Tax (TDS)', type: SalaryHeadType.DEDUCTION, calc: CalculationType.FIXED, isTaxable: false, isLeave: false },
-    { code: 'PROF_TAX', name: 'Professional Tax', type: SalaryHeadType.DEDUCTION, calc: CalculationType.FIXED, isTaxable: false, isLeave: false, config: { fixedAmount: 200 } },
-    { code: 'GIS', name: 'Group Insurance Scheme', type: SalaryHeadType.DEDUCTION, calc: CalculationType.FIXED, isTaxable: false, isLeave: false, config: { fixedAmount: 120 } },
-    { code: 'HEALTH_SCHEME', name: 'Institutional Health Scheme', type: SalaryHeadType.DEDUCTION, calc: CalculationType.FIXED, isTaxable: false, isLeave: false, config: { fixedAmount: 500 } },
-    { code: 'NPS_EMPLOYER', name: 'Employer NPS Contribution (14% Basic+DA)', type: SalaryHeadType.EMPLOYER_CONTRIBUTION, calc: CalculationType.PERCENTAGE_OF_HEAD, isTaxable: false, isLeave: false, config: { baseHead: 'BASIC_PLUS_DA', percentage: 14.0 } }
-  ];
-
-  const headMap: Record<string, string> = {};
-  for (const h of salaryHeadsData) {
-    const head = await prisma.salaryHead.upsert({
-      where: { institutionId_code: { institutionId: institution.id, code: h.code } },
-      update: { name: h.name, type: h.type, calculationType: h.calc, isTaxable: h.isTaxable, formulaConfig: h.config ?? {} },
-      create: {
-        institutionId: institution.id,
-        code: h.code,
-        name: h.name,
-        type: h.type,
-        calculationType: h.calc,
-        isTaxable: h.isTaxable,
-        isLeaveImpacted: h.isLeave,
-        formulaConfig: h.config ?? {}
-      }
-    });
-    headMap[h.code] = head.id;
-  }
-  console.log('✓ Salary Heads seeded');
-
-  // 10. Salary Structures
-  const structureTeaching = await prisma.salaryStructure.upsert({
-    where: { institutionId_code: { institutionId: institution.id, code: '7CPC_ACADEMIC_STANDARD' } },
-    update: {},
-    create: {
-      institutionId: institution.id,
-      code: '7CPC_ACADEMIC_STANDARD',
-      name: '7th CPC Academic Structure (Permanent)',
-      employmentType: EmploymentType.PERMANENT
     }
   });
 
-  const teachingLines = [
-    { headCode: 'BASIC', calc: CalculationType.FIXED, order: 1 },
-    { headCode: 'DA', calc: CalculationType.PERCENTAGE_OF_HEAD, base: 'BASIC', pct: 50.0, order: 2 },
-    { headCode: 'HRA', calc: CalculationType.PERCENTAGE_OF_HEAD, base: 'BASIC', pct: 27.0, order: 3 },
-    { headCode: 'TA', calc: CalculationType.FIXED, amount: 7200, order: 4 },
-    { headCode: 'NPS_TIER1', calc: CalculationType.PERCENTAGE_OF_HEAD, base: 'BASIC_PLUS_DA', pct: 10.0, order: 5 },
-    { headCode: 'TDS', calc: CalculationType.FIXED, order: 6 },
-    { headCode: 'PROF_TAX', calc: CalculationType.FIXED, amount: 200, order: 7 },
-    { headCode: 'GIS', calc: CalculationType.FIXED, amount: 120, order: 8 },
-    { headCode: 'HEALTH_SCHEME', calc: CalculationType.FIXED, amount: 500, order: 9 },
-    { headCode: 'NPS_EMPLOYER', calc: CalculationType.PERCENTAGE_OF_HEAD, base: 'BASIC_PLUS_DA', pct: 14.0, order: 10 }
-  ];
-
-  for (const l of teachingLines) {
-    await prisma.salaryStructureLine.upsert({
-      where: { structureId_salaryHeadId: { structureId: structureTeaching.id, salaryHeadId: headMap[l.headCode] } },
-      update: { percentage: l.pct, fixedAmount: l.amount, displayOrder: l.order },
-      create: {
-        structureId: structureTeaching.id,
-        salaryHeadId: headMap[l.headCode],
-        calculationType: l.calc,
-        baseHeadCode: l.base,
-        percentage: l.pct,
-        fixedAmount: l.amount,
-        displayOrder: l.order
-      }
-    });
-  }
-
-  // 11. Tax Sections
-  const taxSections = [
-    { sectionCode: '80C', name: 'Life Insurance, PF, PPF, Tuition Fees', maxLimit: 150000, regimeAllowed: TaxRegime.OLD },
-    { sectionCode: '80D', name: 'Health Insurance Premium', maxLimit: 25000, regimeAllowed: TaxRegime.OLD },
-    { sectionCode: '24B', name: 'Interest on Housing Loan', maxLimit: 200000, regimeAllowed: TaxRegime.OLD },
-    { sectionCode: '80CCD_1B', name: 'Additional NPS Contribution', maxLimit: 50000, regimeAllowed: TaxRegime.OLD },
-    { sectionCode: 'STD_DEDUCTION', name: 'Standard Deduction (Salaried)', maxLimit: 75000, regimeAllowed: TaxRegime.NEW }
-  ];
-
-  for (const ts of taxSections) {
-    await prisma.taxSection.upsert({
-      where: { sectionCode: ts.sectionCode },
-      update: { name: ts.name, maxLimit: ts.maxLimit, regimeAllowed: ts.regimeAllowed },
-      create: ts
-    });
-  }
-
-  // 12. Leave Types
-  const leaveTypes = [
-    { code: 'CL', name: 'Casual Leave', isPaid: true, ratio: 0.0 },
-    { code: 'EL', name: 'Earned Leave', isPaid: true, ratio: 0.0 },
-    { code: 'HPL', name: 'Half Pay Leave', isPaid: true, ratio: 0.5 },
-    { code: 'EOL', name: 'Extraordinary Leave (Without Pay)', isPaid: false, ratio: 1.0 }
-  ];
-
-  for (const lt of leaveTypes) {
-    await prisma.leaveType.upsert({
-      where: { institutionId_code: { institutionId: institution.id, code: lt.code } },
-      update: { isPaid: lt.isPaid, deductionRatio: lt.ratio },
-      create: { institutionId: institution.id, code: lt.code, name: lt.name, isPaid: lt.isPaid, deductionRatio: lt.ratio }
-    });
-  }
-
-  // 13. Loan Types
-  const loanTypes = [
-    { code: 'COMP_ADV', name: 'Computer Advance', maxAmount: 50000, rate: 5.0, installments: 24 },
-    { code: 'FEST_ADV', name: 'Festival Advance', maxAmount: 10000, rate: 0.0, installments: 10 },
-    { code: 'HBA', name: 'House Building Advance', maxAmount: 2500000, rate: 7.5, installments: 180 }
-  ];
-
-  for (const lt of loanTypes) {
-    await prisma.loanType.upsert({
-      where: { institutionId_code: { institutionId: institution.id, code: lt.code } },
-      update: {},
-      create: {
-        institutionId: institution.id,
-        code: lt.code,
-        name: lt.name,
-        maxAmount: lt.maxAmount,
-        interestRate: lt.rate,
-        maxInstallments: lt.installments
-      }
-    });
-  }
-
-  // 14. GPF Interest Rate
-  await prisma.gpfInterestRate.upsert({
-    where: {
-      institutionId_financialYearId_effectiveFrom: {
-        institutionId: institution.id,
-        financialYearId: fy2026.id,
-        effectiveFrom: new Date('2026-04-01T00:00:00Z')
-      }
-    },
-    update: { ratePercentage: 7.1 },
-    create: {
-      institutionId: institution.id,
-      financialYearId: fy2026.id,
-      ratePercentage: 7.1,
-      effectiveFrom: new Date('2026-04-01T00:00:00Z'),
-      effectiveTo: new Date('2027-03-31T23:59:59Z'),
-      isApproved: true
+  // 10. Shift Policies
+  const shiftGeneral = await prisma.shiftPolicy.create({
+    data: {
+      companyId: company.id,
+      code: 'GS-0930',
+      name: 'General Corporate Shift (09:30 - 18:30)',
+      startTime: '09:30',
+      endTime: '18:30',
+      graceMinutes: 15,
+      halfDayMinutes: 240,
+      fullDayMinutes: 480
     }
   });
 
-  // 15. Other Payment Types
-  const otherTypes = [
-    { code: 'CEA', name: 'Children Education Allowance', isTaxable: true },
-    { code: 'HONORARIUM', name: 'Examination & Evaluation Honorarium', isTaxable: true },
-    { code: 'RESEARCH_INCENTIVE', name: 'Research Excellence Incentive', isTaxable: true },
-    { code: 'BONUS', name: 'Non-Productivity Linked Bonus', isTaxable: true }
-  ];
+  // 11. Leave Policies
+  const lCl = await prisma.leavePolicy.create({
+    data: { companyId: company.id, code: 'CL', name: 'Casual Leave', annualQuota: 12, isPaid: true, maxCarryForward: 0, encashable: false }
+  });
+  const lSl = await prisma.leavePolicy.create({
+    data: { companyId: company.id, code: 'SL', name: 'Sick Leave', annualQuota: 12, isPaid: true, maxCarryForward: 6, encashable: false }
+  });
+  const lPl = await prisma.leavePolicy.create({
+    data: { companyId: company.id, code: 'PL', name: 'Privilege Leave', annualQuota: 18, isPaid: true, maxCarryForward: 30, encashable: true }
+  });
+  const lComp = await prisma.leavePolicy.create({
+    data: { companyId: company.id, code: 'COMP_OFF', name: 'Compensatory Off', annualQuota: 5, isPaid: true, maxCarryForward: 0, encashable: false }
+  });
 
-  for (const ot of otherTypes) {
-    await prisma.otherPaymentType.upsert({
-      where: { institutionId_code: { institutionId: institution.id, code: ot.code } },
-      update: {},
-      create: { institutionId: institution.id, code: ot.code, name: ot.name, isTaxable: ot.isTaxable }
-    });
-  }
+  if (env === 'production') {
+    console.log('🔒 Production Mode: Creating essential payroll periods and administrative users...');
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
+    ];
+    for (let m = 0; m < 12; m++) {
+      const start = new Date(Date.UTC(2026, m, 1));
+      const end = new Date(Date.UTC(2026, m + 1, 0));
+      const cutoff = new Date(Date.UTC(2026, m, 25));
 
-  // 16. Sample Seed Employees
-  const employeesData = [
-    {
-      code: 'EMP-1001',
-      firstName: 'Dr. Vikram',
-      middleName: 'Prasad',
-      lastName: 'Sharma',
-      gender: 'Male',
-      dob: new Date('1978-06-15'),
-      doj: new Date('2012-08-01'),
-      email: 'vikram.sharma@niher.edu.in',
-      phone: '9876543210',
-      pan: 'ABCPS1234F',
-      maskedPan: 'ABCXXXXX4F',
-      cityCategory: 'X',
-      desigCode: 'PROF',
-      deptId: deptCse.id,
-      ouId: engFaculty.id,
-      level: 13,
-      basic: 131400,
-      bank: { bankName: 'State Bank of India', account: '30012345678', ifsc: 'SBIN0001234' },
-      gpfAccount: 'GPF-CSE-1001',
-      gpfOpening: 450000,
-      roleCode: 'employee_self_service',
-      username: 'vikram.sharma'
-    },
-    {
-      code: 'EMP-1002',
-      firstName: 'Dr. Ananya',
-      middleName: null,
-      lastName: 'Iyer',
-      gender: 'Female',
-      dob: new Date('1985-03-22'),
-      doj: new Date('2016-11-15'),
-      email: 'ananya.iyer@niher.edu.in',
-      phone: '9876543211',
-      pan: 'ABCPY5678K',
-      maskedPan: 'ABCXXXXX8K',
-      cityCategory: 'X',
-      desigCode: 'ASSOC_PROF',
-      deptId: deptPhysics.id,
-      ouId: sciFaculty.id,
-      level: 12,
-      basic: 79800,
-      bank: { bankName: 'Punjab National Bank', account: '10098765432', ifsc: 'PUNB0005678' },
-      gpfAccount: 'GPF-PHY-1002',
-      gpfOpening: 220000,
-      roleCode: 'employee_self_service',
-      username: 'ananya.iyer'
-    },
-    {
-      code: 'EMP-1003',
-      firstName: 'Rajesh',
-      middleName: 'Kumar',
-      lastName: 'Verma',
-      gender: 'Male',
-      dob: new Date('1982-10-10'),
-      doj: new Date('2014-04-01'),
-      email: 'rajesh.verma@niher.edu.in',
-      phone: '9876543212',
-      pan: 'ABCPV9012L',
-      maskedPan: 'ABCXXXXX2L',
-      cityCategory: 'X',
-      desigCode: 'SEC_OFFICER',
-      deptId: deptAdmin.id,
-      ouId: mainCampus.id,
-      level: 7,
-      basic: 44900,
-      bank: { bankName: 'Canara Bank', account: '20055443322', ifsc: 'CNRB0001122' },
-      gpfAccount: 'GPF-ADM-1003',
-      gpfOpening: 180000,
-      roleCode: 'payroll_pda',
-      username: 'pda_officer'
-    },
-    {
-      code: 'EMP-1004',
-      firstName: 'Suresh',
-      middleName: 'Chandra',
-      lastName: 'Patel',
-      gender: 'Male',
-      dob: new Date('1975-12-05'),
-      doj: new Date('2005-01-10'),
-      email: 'suresh.patel@niher.edu.in',
-      phone: '9876543213',
-      pan: 'ABCPP3456M',
-      maskedPan: 'ABCXXXXX6M',
-      cityCategory: 'X',
-      desigCode: 'FIN_OFFICER',
-      deptId: deptAdmin.id,
-      ouId: mainCampus.id,
-      level: 14,
-      basic: 144200,
-      bank: { bankName: 'State Bank of India', account: '30099887766', ifsc: 'SBIN0001234' },
-      gpfAccount: 'GPF-ADM-1004',
-      gpfOpening: 950000,
-      roleCode: 'payroll_pfo',
-      username: 'pfo_officer'
-    }
-  ];
-
-  for (const emp of employeesData) {
-    const employee = await prisma.employee.upsert({
-      where: { institutionId_employeeCode: { institutionId: institution.id, employeeCode: emp.code } },
-      update: { basicPay: undefined },
-      create: {
-        institutionId: institution.id,
-        ouId: emp.ouId,
-        departmentId: emp.deptId,
-        designationId: desigMap[emp.desigCode],
-        employeeGroupId: emp.level >= 10 ? groupA.id : groupB.id,
-        managedPayrollGroupId: emp.level >= 10 ? payrollGroupTeaching.id : payrollGroupStaff.id,
-        employeeCode: emp.code,
-        firstName: emp.firstName,
-        middleName: emp.middleName,
-        lastName: emp.lastName,
-        gender: emp.gender,
-        dateOfBirth: emp.dob,
-        dateOfJoining: emp.doj,
-        email: emp.email,
-        phone: emp.phone,
-        pan: emp.pan,
-        maskedPan: emp.maskedPan,
-        aadhaarLast4: '4321',
-        cityCategory: emp.cityCategory
-      }
-    });
-
-    // Bank
-    await prisma.employeeBankAccount.deleteMany({ where: { employeeId: employee.id } });
-    await prisma.employeeBankAccount.create({
-      data: {
-        employeeId: employee.id,
-        bankName: emp.bank.bankName,
-        accountNumber: emp.bank.account,
-        maskedAccount: 'XXXXXX' + emp.bank.account.slice(-4),
-        ifscCode: emp.bank.ifsc,
-        paymentMode: PaymentMethod.NEFT,
-        isPrimary: true
-      }
-    });
-
-    // Salary assignment
-    await prisma.employeeSalaryAssignment.deleteMany({ where: { employeeId: employee.id } });
-    await prisma.employeeSalaryAssignment.create({
-      data: {
-        employeeId: employee.id,
-        structureId: structureTeaching.id,
-        payLevelId: payLevelMap[emp.level],
-        payMatrixCellId: firstCellMap[emp.level],
-        basicPay: emp.basic,
-        effectiveFrom: new Date('2026-04-01T00:00:00Z'),
-        active: true
-      }
-    });
-
-    // Tax profile
-    await prisma.employeeTaxProfile.upsert({
-      where: { employeeId_financialYearId: { employeeId: employee.id, financialYearId: fy2026.id } },
-      update: {},
-      create: {
-        employeeId: employee.id,
-        financialYearId: fy2026.id,
-        regime: TaxRegime.NEW,
-        active: true
-      }
-    });
-
-    // GPF account
-    await prisma.gpfAccount.upsert({
-      where: { accountNumber: emp.gpfAccount },
-      update: {},
-      create: {
-        employeeId: employee.id,
-        accountNumber: emp.gpfAccount,
-        openingBalance: emp.gpfOpening,
-        openingBalanceDate: new Date('2026-04-01T00:00:00Z'),
-        currentBalance: emp.gpfOpening
-      }
-    });
-
-    // User account
-    const user = await prisma.user.upsert({
-      where: { username: emp.username },
-      update: { employeeId: employee.id },
-      create: {
-        institutionId: institution.id,
-        employeeId: employee.id,
-        username: emp.username,
-        email: emp.email,
-        passwordHash,
-        fullName: `${emp.firstName} ${emp.lastName}`
-      }
-    });
-
-    const role = await prisma.role.findUnique({ where: { code: emp.roleCode } });
-    if (role) {
-      await prisma.userRole.deleteMany({ where: { userId: user.id } });
-      await prisma.userRole.create({
-        data: { userId: user.id, roleId: role.id }
-      });
-    }
-  }
-
-  // 17. Seed dedicated system administration and workflow users
-  const systemUsers = [
-    { username: 'admin', email: 'admin@niher.edu.in', fullName: 'Chief Payroll Administrator', role: 'payroll_admin' },
-    { username: 'pvo_officer', email: 'pvo@niher.edu.in', fullName: 'Payroll Verifying Officer', role: 'payroll_pvo' },
-    { username: 'ar_salary', email: 'approver@niher.edu.in', fullName: 'Assistant Registrar (Salary Approver)', role: 'payroll_ar_salary' },
-    { username: 'tax_admin', email: 'tax@niher.edu.in', fullName: 'Income Tax Administrator', role: 'payroll_incometax_admin' },
-    { username: 'ou_admin', email: 'ouadmin@niher.edu.in', fullName: 'Engineering Faculty Payroll Officer', role: 'payroll_ou_admin', ouId: engFaculty.id }
-  ];
-
-  for (const su of systemUsers) {
-    const user = await prisma.user.upsert({
-      where: { username: su.username },
-      update: { passwordHash },
-      create: {
-        institutionId: institution.id,
-        username: su.username,
-        email: su.email,
-        passwordHash,
-        fullName: su.fullName
-      }
-    });
-
-    const role = await prisma.role.findUnique({ where: { code: su.role } });
-    if (role) {
-      await prisma.userRole.deleteMany({ where: { userId: user.id } });
-      await prisma.userRole.create({
-        data: {
-          userId: user.id,
-          roleId: role.id,
-          ouId: su.ouId ?? null
+      await prisma.payrollPeriod.upsert({
+        where: {
+          companyId_month_year: {
+            companyId: company.id,
+            month: m + 1,
+            year: 2026
+          }
+        },
+        update: {},
+        create: {
+          companyId: company.id,
+          periodNumber: m + 1,
+          name: `${monthNames[m]} 2026`,
+          month: m + 1,
+          year: 2026,
+          startDate: start,
+          endDate: end,
+          cutoffDate: cutoff,
+          isLocked: m < 9
         }
       });
     }
+
+    await prisma.user.upsert({
+      where: { username: 'admin' },
+      update: {},
+      create: {
+        companyId: company.id,
+        username: 'admin',
+        email: 'admin@apexglobal.tech',
+        passwordHash: defaultPasswordHash,
+        fullName: 'System Administrator',
+        userRoles: {
+          create: [
+            { roleId: roleMap.get('company_admin')! },
+            { roleId: roleMap.get('platform_admin')! }
+          ]
+        }
+      }
+    });
+
+    console.log('✅ Production base master setup completed successfully. Zero mock records created.');
+    return;
   }
 
-  console.log('✓ System administrative and workflow users seeded with password "Admin@123"');
-  console.log('Seeding completed successfully!');
+  // 12. Corporate Employees (Development & Test Fixtures)
+  // Employee 1: Rohit Sharma (VP Engineering, Manager)
+  const empRohit = await prisma.employee.create({
+    data: {
+      companyId: company.id,
+      branchId: bHeadquarters.id,
+      departmentId: deptEng.id,
+      designationId: desVp.id,
+      jobBandId: bandL4.id,
+      costCenterId: ccRnd.id,
+      employeeCode: 'APEX-1001',
+      firstName: 'Rohit',
+      lastName: 'Sharma',
+      workEmail: 'rohit.sharma@apexglobal.tech',
+      personalEmail: 'rohit.sharma.personal@gmail.com',
+      phone: '+91 98200 12345',
+      dateOfBirth: new Date('1985-06-15'),
+      gender: 'MALE',
+      employmentType: 'PERMANENT',
+      status: 'CONFIRMED',
+      workMode: 'HYBRID',
+      dateOfJoining: new Date('2021-04-01'),
+      confirmationDate: new Date('2021-07-01'),
+      probationDays: 90,
+      panNumber: 'ABCPS1234F',
+      uanNumber: '100904589211',
+      pfNumber: 'MH/BAN/0045892/000/1001',
+      bankName: 'HDFC Bank',
+      bankAccountNumber: '50100234567890',
+      ifscCode: 'HDFC0000123',
+      bankBranch: 'BKC Branch'
+    }
+  });
+
+  // Employee 2: Ananya Verma (Lead Product Designer)
+  const empAnanya = await prisma.employee.create({
+    data: {
+      companyId: company.id,
+      branchId: bHeadquarters.id,
+      departmentId: deptPrd.id,
+      designationId: desLeadDes.id,
+      jobBandId: bandL3.id,
+      costCenterId: ccRnd.id,
+      managerId: empRohit.id,
+      employeeCode: 'APEX-1002',
+      firstName: 'Ananya',
+      lastName: 'Verma',
+      workEmail: 'ananya.verma@apexglobal.tech',
+      personalEmail: 'ananya.design@gmail.com',
+      phone: '+91 98201 23456',
+      dateOfBirth: new Date('1991-09-22'),
+      gender: 'FEMALE',
+      employmentType: 'PERMANENT',
+      status: 'CONFIRMED',
+      workMode: 'HYBRID',
+      dateOfJoining: new Date('2022-06-15'),
+      confirmationDate: new Date('2022-09-15'),
+      probationDays: 90,
+      panNumber: 'ABCPV5678K',
+      uanNumber: '100904589212',
+      pfNumber: 'MH/BAN/0045892/000/1002',
+      bankName: 'ICICI Bank',
+      bankAccountNumber: '001101567890',
+      ifscCode: 'ICIC0000011',
+      bankBranch: 'Bandra West Branch'
+    }
+  });
+
+  // Employee 3: Rahul Mehta (Senior Software Engineer)
+  const empRahul = await prisma.employee.create({
+    data: {
+      companyId: company.id,
+      branchId: bBengaluru.id,
+      departmentId: deptEng.id,
+      designationId: desSrEng.id,
+      jobBandId: bandL2.id,
+      costCenterId: ccRnd.id,
+      managerId: empRohit.id,
+      employeeCode: 'APEX-1003',
+      firstName: 'Rahul',
+      lastName: 'Mehta',
+      workEmail: 'rahul.mehta@apexglobal.tech',
+      personalEmail: 'rahul.dev@gmail.com',
+      phone: '+91 98450 34567',
+      dateOfBirth: new Date('1995-11-04'),
+      gender: 'MALE',
+      employmentType: 'PERMANENT',
+      status: 'CONFIRMED',
+      workMode: 'OFFICE',
+      dateOfJoining: new Date('2023-01-10'),
+      confirmationDate: new Date('2023-04-10'),
+      probationDays: 90,
+      panNumber: 'ABCPM9012L',
+      uanNumber: '100904589213',
+      pfNumber: 'MH/BAN/0045892/000/1003',
+      bankName: 'State Bank of India',
+      bankAccountNumber: '30245678901',
+      ifscCode: 'SBIN0004567',
+      bankBranch: 'Whitefield Branch'
+    }
+  });
+
+  // Assign Salary Structures
+  // Rahul: CTC ₹14,40,000 (Monthly Gross ₹1,10,000)
+  // Basic: 50,000, HRA: 25,000, Spl: 25,000, Conv: 5,000, Med: 5,000
+  // PF: 6,000 (12% of 50000), PT: 200, TDS: 7,500
+  const rahulStructure = await prisma.employeeSalaryStructure.create({
+    data: {
+      employeeId: empRahul.id,
+      annualCtc: 1440000,
+      monthlyGross: 110000,
+      effectiveFrom: new Date('2024-04-01'),
+      lines: {
+        create: [
+          { componentId: cBasic.id, monthlyAmount: 50000, annualAmount: 600000 },
+          { componentId: cHra.id, monthlyAmount: 25000, annualAmount: 300000 },
+          { componentId: cSpl.id, monthlyAmount: 25000, annualAmount: 300000 },
+          { componentId: cConv.id, monthlyAmount: 5000, annualAmount: 60000 },
+          { componentId: cMed.id, monthlyAmount: 5000, annualAmount: 60000 },
+          { componentId: cPfEmp.id, monthlyAmount: 6000, annualAmount: 72000 },
+          { componentId: cPt.id, monthlyAmount: 200, annualAmount: 2400 },
+          { componentId: cTds.id, monthlyAmount: 7500, annualAmount: 90000 },
+          { componentId: cPfEmpr.id, monthlyAmount: 6000, annualAmount: 72000 },
+          { componentId: cGrat.id, monthlyAmount: 2405, annualAmount: 28860 }
+        ]
+      }
+    }
+  });
+
+  // Ananya: CTC ₹18,00,000 (Monthly Gross ₹1,35,000)
+  await prisma.employeeSalaryStructure.create({
+    data: {
+      employeeId: empAnanya.id,
+      annualCtc: 1800000,
+      monthlyGross: 135000,
+      effectiveFrom: new Date('2024-04-01'),
+      lines: {
+        create: [
+          { componentId: cBasic.id, monthlyAmount: 65000, annualAmount: 780000 },
+          { componentId: cHra.id, monthlyAmount: 32500, annualAmount: 390000 },
+          { componentId: cSpl.id, monthlyAmount: 27500, annualAmount: 330000 },
+          { componentId: cConv.id, monthlyAmount: 5000, annualAmount: 60000 },
+          { componentId: cMed.id, monthlyAmount: 5000, annualAmount: 60000 },
+          { componentId: cPfEmp.id, monthlyAmount: 7800, annualAmount: 93600 },
+          { componentId: cPt.id, monthlyAmount: 200, annualAmount: 2400 },
+          { componentId: cTds.id, monthlyAmount: 11000, annualAmount: 132000 },
+          { componentId: cPfEmpr.id, monthlyAmount: 7800, annualAmount: 93600 },
+          { componentId: cGrat.id, monthlyAmount: 3127, annualAmount: 37524 }
+        ]
+      }
+    }
+  });
+
+  // Rohit: CTC ₹32,00,000 (Monthly Gross ₹2,40,000)
+  await prisma.employeeSalaryStructure.create({
+    data: {
+      employeeId: empRohit.id,
+      annualCtc: 3200000,
+      monthlyGross: 240000,
+      effectiveFrom: new Date('2024-04-01'),
+      lines: {
+        create: [
+          { componentId: cBasic.id, monthlyAmount: 115000, annualAmount: 1380000 },
+          { componentId: cHra.id, monthlyAmount: 57500, annualAmount: 690000 },
+          { componentId: cSpl.id, monthlyAmount: 52500, annualAmount: 630000 },
+          { componentId: cConv.id, monthlyAmount: 7500, annualAmount: 90000 },
+          { componentId: cMed.id, monthlyAmount: 7500, annualAmount: 90000 },
+          { componentId: cPfEmp.id, monthlyAmount: 13800, annualAmount: 165600 },
+          { componentId: cPt.id, monthlyAmount: 200, annualAmount: 2400 },
+          { componentId: cTds.id, monthlyAmount: 32000, annualAmount: 384000 },
+          { componentId: cPfEmpr.id, monthlyAmount: 13800, annualAmount: 165600 },
+          { componentId: cGrat.id, monthlyAmount: 5532, annualAmount: 66384 }
+        ]
+      }
+    }
+  });
+
+  // Employee-Specific Payroll Policies & Statutory Eligibility
+  await prisma.employeePayrollPolicy.createMany({
+    data: [
+      {
+        employeeId: empRohit.id,
+        pfApplicable: true,
+        pfStatus: 'APPLICABLE',
+        pfWageBasis: 'CEILING_15000',
+        pfNumber: empRohit.pfNumber,
+        uanNumber: empRohit.uanNumber,
+        esiApplicable: false,
+        esiStatus: 'EXEMPT_OVER_CEILING',
+        ptApplicable: true,
+        ptState: 'Maharashtra',
+        taxRegime: 'NEW',
+        paymentMode: 'NEFT',
+        payrollFrequency: 'MONTHLY',
+        effectiveFrom: new Date('2024-04-01')
+      },
+      {
+        employeeId: empAnanya.id,
+        pfApplicable: true,
+        pfStatus: 'APPLICABLE',
+        pfWageBasis: 'ACTUAL_BASIC',
+        pfNumber: empAnanya.pfNumber,
+        uanNumber: empAnanya.uanNumber,
+        esiApplicable: false,
+        esiStatus: 'EXEMPT_OVER_CEILING',
+        ptApplicable: true,
+        ptState: 'Maharashtra',
+        taxRegime: 'OLD',
+        paymentMode: 'NEFT',
+        payrollFrequency: 'MONTHLY',
+        effectiveFrom: new Date('2024-04-01')
+      },
+      {
+        employeeId: empRahul.id,
+        pfApplicable: true,
+        pfStatus: 'APPLICABLE',
+        pfWageBasis: 'CEILING_15000',
+        pfNumber: empRahul.pfNumber,
+        uanNumber: empRahul.uanNumber,
+        esiApplicable: false,
+        esiStatus: 'EXEMPT_OVER_CEILING',
+        ptApplicable: true,
+        ptState: 'Karnataka',
+        taxRegime: 'NEW',
+        paymentMode: 'NEFT',
+        payrollFrequency: 'MONTHLY',
+        effectiveFrom: new Date('2024-04-01')
+      }
+    ]
+  });
+
+  // Leave Balances for all 3 employees
+  for (const emp of [empRohit, empAnanya, empRahul]) {
+    await prisma.employeeLeaveBalance.createMany({
+      data: [
+        { employeeId: emp.id, leavePolicyId: lCl.id, calendarYear: 2026, credited: 12, used: 2, balance: 10 },
+        { employeeId: emp.id, leavePolicyId: lSl.id, calendarYear: 2026, credited: 12, used: 1, balance: 11 },
+        { employeeId: emp.id, leavePolicyId: lPl.id, calendarYear: 2026, credited: 18, used: 3, balance: 15 }
+      ]
+    });
+  }
+
+  // 13. Payroll Periods (Calendar Year 2026)
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+
+  const periods = [];
+  for (let m = 0; m < 12; m++) {
+    const start = new Date(Date.UTC(2026, m, 1));
+    const end = new Date(Date.UTC(2026, m + 1, 0));
+    const cutoff = new Date(Date.UTC(2026, m, 25));
+
+    const p = await prisma.payrollPeriod.create({
+      data: {
+        companyId: company.id,
+        periodNumber: m + 1,
+        name: `${monthNames[m]} 2026`,
+        month: m + 1,
+        year: 2026,
+        startDate: start,
+        endDate: end,
+        cutoffDate: cutoff,
+        isLocked: m < 9 // Lock past months up to Sep 2026
+      }
+    });
+    periods.push(p);
+  }
+
+  // 14. Corporate Users
+  const userAdmin = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      username: 'admin',
+      email: 'admin@apexglobal.tech',
+      passwordHash: defaultPasswordHash,
+      fullName: 'System Administrator',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('company_admin')! },
+          { roleId: roleMap.get('platform_admin')! }
+        ]
+      }
+    }
+  });
+
+  const userHr = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      username: 'hr.manager',
+      email: 'hr.manager@apexglobal.tech',
+      passwordHash: defaultPasswordHash,
+      fullName: 'Pooja Hegde (HR Lead)',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('hr_manager')! }
+        ]
+      }
+    }
+  });
+
+  const userPayroll = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      username: 'payroll.officer',
+      email: 'payroll@apexglobal.tech',
+      passwordHash: defaultPasswordHash,
+      fullName: 'Siddharth Nair (Payroll Specialist)',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('payroll_admin')! }
+        ]
+      }
+    }
+  });
+
+  const userFinance = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      username: 'finance.lead',
+      email: 'finance@apexglobal.tech',
+      passwordHash: defaultPasswordHash,
+      fullName: 'Alok Singhal (Finance Controller)',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('finance_admin')! }
+        ]
+      }
+    }
+  });
+
+  // Employee Login Users
+  const userRohit = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      employeeId: empRohit.id,
+      username: 'rohit.sharma',
+      email: empRohit.workEmail,
+      passwordHash: defaultPasswordHash,
+      fullName: 'Rohit Sharma',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('department_manager')! },
+          { roleId: roleMap.get('employee')! }
+        ]
+      }
+    }
+  });
+
+  const userAnanya = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      employeeId: empAnanya.id,
+      username: 'ananya.verma',
+      email: empAnanya.workEmail,
+      passwordHash: defaultPasswordHash,
+      fullName: 'Ananya Verma',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('employee')! }
+        ]
+      }
+    }
+  });
+
+  const userRahul = await prisma.user.create({
+    data: {
+      companyId: company.id,
+      employeeId: empRahul.id,
+      username: 'rahul.mehta',
+      email: empRahul.workEmail,
+      passwordHash: defaultPasswordHash,
+      fullName: 'Rahul Mehta',
+      userRoles: {
+        create: [
+          { roleId: roleMap.get('employee')! }
+        ]
+      }
+    }
+  });
+
+  // 15. Sample Recruitment Job Openings
+  const jobEng = await prisma.jobOpening.create({
+    data: {
+      companyId: company.id,
+      departmentId: deptEng.id,
+      designationId: desSrEng.id,
+      title: 'Senior Full Stack Engineer (Node.js & React)',
+      openingsCount: 3,
+      minExperience: 5,
+      budgetMin: 1400000,
+      budgetMax: 2000000,
+      description: 'Looking for a senior full stack engineer proficient in TypeScript, React, Express, and PostgreSQL.'
+    }
+  });
+
+  const candKunal = await prisma.candidate.create({
+    data: {
+      fullName: 'Kunal Deshmukh',
+      email: 'kunal.deshmukh@gmail.com',
+      phone: '+91 99200 44556',
+      currentCompany: 'Infosys Limited',
+      currentCtc: 1200000,
+      expectedCtc: 1600000,
+      noticePeriodDays: 30
+    }
+  });
+
+  await prisma.jobApplication.create({
+    data: {
+      jobOpeningId: jobEng.id,
+      candidateId: candKunal.id,
+      stage: 'TECHNICAL_INTERVIEW',
+      notes: 'Strong DSA and system design background. Scheduled for round 2.'
+    }
+  });
+
+  // 16. Sample IT Assets
+  const asset1 = await prisma.companyAsset.create({
+    data: {
+      companyId: company.id,
+      assetTag: 'AST-MAC-2024-001',
+      name: 'Apple MacBook Pro 16" M3 Pro',
+      category: 'LAPTOP',
+      serialNumber: 'C02G1234MD6R',
+      condition: 'NEW'
+    }
+  });
+
+  await prisma.assetAllocation.create({
+    data: {
+      assetId: asset1.id,
+      employeeId: empRahul.id,
+      status: 'ALLOCATED'
+    }
+  });
+
+  // 17. Sample Help Desk Categories & Ticket
+  const catIt = await prisma.helpDeskCategory.create({
+    data: { companyId: company.id, name: 'IT Infrastructure & Access', slaHours: 24 }
+  });
+  const catHr = await prisma.helpDeskCategory.create({
+    data: { companyId: company.id, name: 'Payroll & Tax Queries', slaHours: 48 }
+  });
+
+  await prisma.helpDeskTicket.create({
+    data: {
+      ticketNumber: 'TKT-2026-001',
+      employeeId: empRahul.id,
+      categoryId: catIt.id,
+      priority: 'MEDIUM',
+      subject: 'Docker Desktop License Request',
+      description: 'Requesting Docker Desktop license for development in the Apex Global microservices workspace.',
+      status: 'OPEN'
+    }
+  });
+
+  // 18. Sample Loan / Salary Advance
+  const loanAdvance = await prisma.loanType.create({
+    data: {
+      companyId: company.id,
+      code: 'SAL-ADV',
+      name: 'Salary Advance (Interest-Free)',
+      maxAmount: 100000,
+      interestRatePct: 0,
+      maxTenureMonths: 6
+    }
+  });
+
+  // 19. Sample Expense Categories
+  await prisma.expenseCategory.createMany({
+    data: [
+      { companyId: company.id, code: 'EXP-TRAVEL', name: 'Travel & Lodging', maxLimit: 50000, requiresReceipt: true },
+      { companyId: company.id, code: 'EXP-MEAL', name: 'Client Meal & Dining', maxLimit: 5000, requiresReceipt: true },
+      { companyId: company.id, code: 'EXP-INTERNET', name: 'Work From Home Broadband', maxLimit: 1500, requiresReceipt: true }
+    ]
+  });
+
+  console.log('✅ Corporate HRMS & Payroll seed completed successfully!');
+  console.log(`🏢 Company: ${company.name} (${company.code})`);
+  console.log(`👥 Seeded ${await prisma.employee.count()} Employees, ${await prisma.user.count()} Users`);
+  console.log('🔑 Default password for all seed accounts: Admin@123');
 }
 
 main()
   .catch((e) => {
-    console.error('Seeding error:', e);
+    console.error('❌ Error during seed:', e);
     process.exit(1);
   })
   .finally(async () => {

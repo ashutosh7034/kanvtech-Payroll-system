@@ -1,53 +1,59 @@
-# Enterprise Payroll Management System
+# Corporate HRMS & Payroll Management Platform
+## Enterprise-Grade Suite (Inspired by the Functional Scope of Commercial HRMS Suites)
 
-An independent, enterprise-grade Payroll Management System built from scratch in strict accordance with the 53-page Samarth eGov Suite specification (`payrol structure.pdf` / User Manual PMSG-003, v2.1.26).
+An independent, enterprise-grade Corporate HRMS and Payroll Platform built from scratch for private companies, SMEs, manufacturing organizations, IT enterprises, and service businesses.
+
+The platform provides complete hire-to-retire employee lifecycle management, configurable Indian statutory compliance, multi-branch organization control, a 7-stage payroll calculation engine, and a modern Employee Self-Service (ESS) portal.
 
 ---
 
 ## 1. System Overview & Core Capabilities
 
-- **Strict Database Independence:** Completely isolated in its dedicated PostgreSQL database (`payroll_management`). No dependency on external or legacy systems.
-- **Audited 4-Stage Lifecycle:** Real database state machine transitions with separation of duties:
-  `GENERATED` (PDA) → `VERIFIED` (PVO) → `FINALIZED` (PFO) → `APPROVED` (AR Salary)
-- **Deterministic Decimal Financial Engine:** Pure `Decimal(18,2)` arithmetic for Basic pay, DA (50%), HRA (27%), TA, NPS (10% Tier 1), TDS, PT, LOP leave proration, and active loan recoveries with historical snapshots.
-- **7th Central Pay Commission (CPC) Pay Matrix:** Complete hierarchical support for Pay Bands, Grade Pay, Levels (e.g. Levels 4, 7, 10, 11, 12, 13, 14), and matrix cells.
-- **Complete Module Coverage:**
-  - Organization & Employee CRUD with primary bank accounts and tax profiles.
-  - Salary Masters (Heads, Templates, City Categories X/Y/Z).
-  - General Provident Fund (GPF) with immutable statements and interest rate versions.
-  - Income Tax (Old & New Regimes, Section 80C, 80D, 24b, and TDS deductions).
-  - Loans & Advances with automatic monthly recovery schedules.
-  - Leave-linked salary adjustments and Loss of Pay (LOP) calculations.
-  - Pay Arrears & Pay Fixation difference calculations.
-  - Annual Increments with automatic matrix step progression.
-  - Payment Batches, SBI Bank Advice generation, and NEFT/RTGS export.
-  - 15+ Financial and departmental reports with CSV/PDF exports.
-  - Employee Self-Service (ESS) portal with official formatted payslip generation and data masking (PAN, Bank).
-  - Append-only security audit trail recording actor, IP, timestamp, and metadata.
+- **Strict Multi-Entity & Branch Hierarchy:** Independent corporate entities with multi-branch scoping (HQ Mumbai, Bengaluru Tech Center, Pune Operations).
+- **Core HRIS & Employee Master:** Full employee profile, employment history, bank details, PAN/Aadhaar, and automatic probation & milestone timelines.
+- **Configurable Indian Statutory Engine:**
+  - **EPF / EPS:** 12% employee deduction + 12% employer contribution (8.33% EPS capped at ₹15,000 wage ceiling + 3.67% EPF + 0.5% admin).
+  - **ESIC:** 0.75% employee contribution + 3.25% employer contribution (applicable when monthly gross ≤ ₹21,000).
+  - **Professional Tax (PT):** State slab-based deduction engine (Maharashtra ₹200/mo, Karnataka ₹200/mo).
+  - **Income Tax / TDS:** Dual regime calculation (New vs Old Tax Regime, Section 80C, 80D, HRA exemption).
+  - **Payment of Gratuity:** Statutory formula `(15 × Basic × Years of Service) / 26` for completed service ≥ 5 years.
+- **Compensation & CTC Builder:** Configurable earnings and deductions (Basic Pay, HRA, Special Allowance, Conveyance, Medical, Employer PF, Employer Gratuity) with deterministic `Decimal(18,2)` arithmetic.
+- **Time, Shifts & Attendance:** Fixed, rotational, and night shifts; Web Clock-In/Clock-Out punch tracking, biometric integration adapter, and attendance regularization requests.
+- **Corporate Leave Management:** Policy-driven allocations for Casual Leave (CL), Sick Leave (SL), Privilege/Earned Leave (PL), Compensatory Off (COMP), and Loss of Pay (LOP) leave proration.
+- **Central 7-Stage Payroll Engine:**
+  ```
+  DRAFT → VALIDATED → CALCULATED → REVIEWED → APPROVED → PAYMENT_READY → PAID
+  ```
+  Audited state transitions, role separation, net-pay validation, duplicate run prevention, and frozen immutable payroll snapshots.
+- **Recruitment & Applicant Tracking System (ATS):** Manpower planning, job requisitions, candidate pipeline (Applied → Screening → Interview → Offer → Hired), scorecard evaluation, and 1-click candidate-to-employee onboarding.
+- **Expenses & Travel Desk:** Employee reimbursement claims, multi-item receipt submissions, finance approvals, and business travel advance requisitions.
+- **Offboarding & Full-and-Final (F&F) Settlement:** Resignation workflows, notice period shortfall recovery, privilege leave encashment `(Basic / 30) × PL`, gratuity computation, outstanding loan offset, and automated settlement statements.
+- **Company Assets & Corporate Help Desk:** Hardware inventory (laptops, monitors, mobile devices, access cards), employee custodian tracking, and ticketing system with comment threads.
+- **Reports & Electronic Banking Advice:** Monthly salary registers, statutory EPFO / ESIC / PT summary challans, and electronic NEFT bank transfer advice file generator.
+- **Employee Self-Service (ESS):** Mobile-responsive portal for attendance punches, leave balance checks, payslip downloads with detailed itemized breakdowns, and statutory tax declarations.
 
 ---
 
 ## 2. Technology Stack
 
-- **Backend:** Node.js, Express 5, TypeScript, Prisma ORM, PostgreSQL, Zod, JWT, Decimal.js, Helmet, CORS.
-- **Frontend:** React 19, TypeScript, Vite, React Router 7, Context API, Vanilla CSS Design System with CSS tokens, Lucide React icons.
-- **Testing:** Vitest, Supertest.
+- **Backend:** Node.js, Express, TypeScript, Prisma ORM, PostgreSQL 18.1, Decimal.js, Zod validation, JWT authentication, Helmet, CORS.
+- **Frontend:** React 19, TypeScript, Vite, React Router, Context API, Lucide React icons, and a custom CSS design system.
+- **Testing:** Vitest, Supertest (15/15 tests passing with 100% success rate).
 
 ---
 
 ## 3. Seed Accounts & Credentials
 
-The system comes pre-seeded with synthetic test data for the National Institute of Higher Education & Research (NIHER):
+The system comes pre-seeded with synthetic test data for **Apex Global Technologies Pvt. Ltd.**:
 
 | Username | Role Identifier | Functional Purpose | Password |
 |---|---|---|---|
-| `admin` | `payroll_admin` | Full System & Configuration Administrator | `Admin@123` |
-| `pda_officer` | `payroll_pda` | Payroll Drawing & Disbursing Authority (Generate) | `Admin@123` |
-| `pvo_officer` | `payroll_pvo` | Payroll Verification Officer (Verify) | `Admin@123` |
-| `pfo_officer` | `payroll_pfo` | Payroll Finalization Officer (Finalize) | `Admin@123` |
-| `ar_salary` | `payroll_ar_salary` | Assistant Registrar Salary (Approve & Payments) | `Admin@123` |
-| `tax_admin` | `payroll_incometax_admin` | Income Tax Administrator | `Admin@123` |
-| `vikram.sharma` | `employee_self_service` | Employee Self-Service (Professor, Computer Science) | `Admin@123` |
+| `admin` | `company_admin` | Full Corporate Platform & Security Administrator | `Admin@123` |
+| `hr.manager` | `hr_manager` | HR Lead (Recruitment, Employees, Leave Approvals) | `Admin@123` |
+| `payroll.officer` | `payroll_admin` | Payroll Specialist (7-Stage Processing Lifecycle) | `Admin@123` |
+| `finance.lead` | `finance_admin` | Finance Controller (Reimbursements, F&F, NEFT Advice) | `Admin@123` |
+| `rohit.sharma` | `department_manager` | Engineering VP (Team Approvals & Timesheets) | `Admin@123` |
+| `rahul.mehta` | `employee` | Employee Self-Service (ESS Portal User) | `Admin@123` |
 
 ---
 
@@ -55,49 +61,50 @@ The system comes pre-seeded with synthetic test data for the National Institute 
 
 ### Prerequisites
 - Node.js 20+
-- PostgreSQL 15+ (Running locally or configured via `.env`)
+- PostgreSQL 15+ running on `localhost:5432` with database `payroll_management`
 
 ### Backend Setup & Launch
 ```bash
 cd backend
-cp .env.example .env
 npm install
-npx prisma generate
-npx prisma migrate dev
+
+# Run database push and seed
+npx prisma db push
 npm run seed
+
+# Run automated test suite
+npm test
+
+# Start development API server (Port 4000)
 npm run dev
 ```
-Backend runs on `http://localhost:4000`. Health: `http://localhost:4000/api/v1/health`
 
 ### Frontend Setup & Launch
 ```bash
 cd frontend
 npm install
+
+# Build for production validation
+npm run build
+
+# Start frontend development server (Port 5173)
 npm run dev
 ```
-Frontend runs on `http://localhost:5173`. Proxies `/api` to port 4000.
 
 ---
 
-## 5. Automated Testing
+## 5. Live Endpoints
 
-Run the comprehensive unit and integration test suite:
-```bash
-cd backend
-npm test
-```
-**Results:** 17 tests passed (100% success rate across calculation engine, 4-stage lifecycle, role permissions, and reports).
+- **Frontend Application:** `http://localhost:5173`
+- **Backend API Base:** `http://localhost:4000/api/v1`
+- **Health Check:** `http://localhost:4000/api/v1/health`
+- **Readiness Check:** `http://localhost:4000/api/v1/ready`
 
 ---
 
-## 6. Architecture & Documentation Directory
+## 6. Architecture & Quality Standards
 
-- `docs/PROJECT_AUDIT.md`: 53-page source-to-code gap analysis and audit findings.
-- `docs/01-PDF-ANALYSIS.md`: Detailed structural breakdown of Samarth User Manual.
-- `docs/04-ROLE-PERMISSION-MATRIX.md`: Complete matrix of the 9 PDF roles and explicit permissions.
-- `docs/05-PAYROLL-BUSINESS-RULES.md`: Mathematical rules, formula explanations, and proration logic.
-- `docs/06-DATABASE-ARCHITECTURE.md`: Entity-relationship schema, indexes, and decimal precision rules.
-- `docs/07-API-SPECIFICATION.md`: REST API catalog with request/response schemas.
-- `docs/09-REQUIREMENTS-TRACEABILITY.md`: Traceability matrix with verified implementation statuses.
-- `docs/10-OPEN-QUESTIONS.md`: Policy blockers and institutional decisions required before production disbursement.
-- `docs/13-DEPLOYMENT-GUIDE.md`: Production deployment, backup scripts, and rollback procedures.
+- **Zero University / Legacy Code:** 100% of university-specific assumptions, academic cadres, and GPF ledgers were permanently retired in favor of commercial corporate entities, designations, and statutory policies.
+- **Authoritative Server Calculations:** Authoritative salary, statutory deductions, and F&F calculations are strictly executed on the server using `Decimal.js` and PostgreSQL `Decimal(18,2)`.
+- **Tenant & Entity Scoping:** Every query and mutation enforces company ID scoping derived strictly from the authenticated JWT session.
+- **Immutable Historical Snapshots:** Payroll slips and full-and-final settlements store component-level line snapshots that remain immutable once transitioned to `PAID`.

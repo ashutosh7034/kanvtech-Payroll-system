@@ -1,25 +1,37 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { api } from '../services/api';
+import {
+  canViewModule as checkCanViewModule,
+  canViewPage as checkCanViewPage,
+  canViewTab as checkCanViewTab,
+  canPerformAction as checkCanPerformAction,
+  canViewField as checkCanViewField,
+  canAccessRecord as checkCanAccessRecord
+} from '../services/permissionService';
 
 export interface UserProfile {
   id: string;
-  institutionId: string;
-  institutionName: string;
-  institutionBrand: string;
-  institutionLogo?: string | null;
+  companyId: string;
+  companyName: string;
+  companyBrand: string;
+  institutionBrand?: string;
+  companyCode?: string;
   username: string;
   fullName: string;
   email: string;
   roles: string[];
   primaryRole: string;
+  permissions?: string[];
+  employeeId?: string | null;
   employee?: {
     id: string;
     employeeCode: string;
     firstName: string;
     lastName: string;
-    email?: string | null;
-    ouId: string;
-    departmentId: string;
+    workEmail?: string | null;
+    departmentId?: string;
+    branchId?: string;
+    designationId?: string;
   } | null;
 }
 
@@ -30,6 +42,12 @@ interface AuthContextType {
   login: (token: string, user: UserProfile) => void;
   logout: () => void;
   hasRole: (roles: string[]) => boolean;
+  canViewModule: (moduleKey: string) => boolean;
+  canViewPage: (pageKey: string) => boolean;
+  canViewTab: (tabKey: string) => boolean;
+  canPerformAction: (actionKey: string) => boolean;
+  canViewField: (fieldKey: string) => boolean;
+  canAccessRecord: (record: { companyId?: string }) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -73,21 +91,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.setItem('pm_auth_user', JSON.stringify(newUser));
   };
 
-  const logout = () => {
-    setToken(null);
-    setUser(null);
-    localStorage.removeItem('pm_auth_token');
-    localStorage.removeItem('pm_auth_user');
+  const logout = async () => {
+    try {
+      const currentToken = localStorage.getItem('pm_auth_token');
+      if (currentToken) {
+        await api.post('/auth/logout');
+      }
+    } catch {
+      // Ignore network/authorization errors on logout
+    } finally {
+      setToken(null);
+      setUser(null);
+      localStorage.removeItem('pm_auth_token');
+      localStorage.removeItem('pm_auth_user');
+    }
   };
 
   const hasRole = (roles: string[]) => {
     if (!user) return false;
-    if (user.roles.includes('payroll_admin') || user.roles.includes('platform_admin')) return true;
+    if (user.roles.includes('company_admin') || user.roles.includes('platform_admin')) return true;
     return user.roles.some(r => roles.includes(r));
   };
 
+  const canViewModule = (moduleKey: string) => checkCanViewModule(moduleKey, user);
+  const canViewPage = (pageKey: string) => checkCanViewPage(pageKey, user);
+  const canViewTab = (tabKey: string) => checkCanViewTab(tabKey, user);
+  const canPerformAction = (actionKey: string) => checkCanPerformAction(actionKey, user);
+  const canViewField = (fieldKey: string) => checkCanViewField(fieldKey, user);
+  const canAccessRecord = (record: { companyId?: string }) => checkCanAccessRecord(record, user);
+
   return (
-    <AuthContext.Provider value={{ user, token, isLoading, login, logout, hasRole }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        token,
+        isLoading,
+        login,
+        logout,
+        hasRole,
+        canViewModule,
+        canViewPage,
+        canViewTab,
+        canPerformAction,
+        canViewField,
+        canAccessRecord
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

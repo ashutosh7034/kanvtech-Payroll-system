@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PayFlow — HRMS & Payroll Management Summary</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      width: 1920px;
+      height: 1080px;
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%);
+      color: #f8fafc;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 64px 80px;
+      overflow: hidden;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+      padding-bottom: 28px;
+    }
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+    }
+    .logo-badge {
+      width: 56px;
+      height: 56px;
+      background: linear-gradient(135deg, #2563eb, #3b82f6);
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 900;
+      color: #ffffff;
+      box-shadow: 0 10px 25px rgba(37, 99, 235, 0.4);
+    }
+    .title-block h1 {
+      font-size: 2.4rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      color: #ffffff;
+    }
+    .title-block p {
+      font-size: 1.1rem;
+      color: #94a3b8;
+      margin-top: 4px;
+    }
+    .evaluation-tag {
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      color: #60a5fa;
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .main-grid {
+      display: grid;
+      grid-template-columns: 3fr 2fr;
+      gap: 48px;
+      margin: 40px 0;
+    }
+    .modules-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 36px;
+      backdrop-filter: blur(12px);
+    }
+    .section-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #38bdf8;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .module-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .module-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      padding: 16px 20px;
+      border-radius: 12px;
+    }
+    .module-icon {
+      width: 32px;
+      height: 32px;
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 1rem;
+      flex-shrink: 0;
+    }
+    .module-info strong {
+      display: block;
+      font-size: 1.05rem;
+      color: #f1f5f9;
+      margin-bottom: 3px;
+    }
+    .module-info span {
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+    .results-card {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .kpi-box {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 18px;
+      padding: 24px 28px;
+      backdrop-filter: blur(12px);
+    }
+    .kpi-title {
+      font-size: 0.85rem;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 8px;
+    }
+    .kpi-value {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #10b981;
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .kpi-sub {
+      font-size: 0.95rem;
+      color: #94a3b8;
+      font-weight: 400;
+    }
+    .status-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.95rem;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.5);
+      border-radius: 8px;
+    }
+    .status-badge {
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .footer {
+      border-top: 1px solid rgba(255, 255, 255, 0.12);
+      padding-top: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: #64748b;
+      font-size: 0.9rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="brand-wrap">
+      <div class="logo-badge">PF</div>
+      <div class="title-block">
+        <h1>PayFlow — HRMS & Payroll Management</h1>
+        <p>Enterprise Human Resource Management & Statutory Payroll ERP</p>
+      </div>
+    </div>
+    <div class="evaluation-tag">Project Demonstration & Technical Verification</div>
+  </div>
+
+  <div class="main-grid">
+    <div class="modules-card">
+      <div class="section-title">Verified Core Functional Modules</div>
+      <div class="module-list">
+        <div class="module-item">
+          <div class="module-icon">1</div>
+          <div class="module-info">
+            <strong>Employee Master Management</strong>
+            <span>Role-based directory, reporting hierarchy, branch assignments & multi-word search filter.</span>
+          </div>
+        </div>
+        <div class="module-item">
+          <div class="module-icon">2</div>
+          <div class="module-info">
+            <strong>Compensation & Mathematical CTC Engine</strong>
+            <span>16 statutory salary components, corporate structure templates, and ₹15 LPA reconciliation.</span>
+          </div>
+        </div>
+        <div class="module-item">
+          <div class="module-icon">3</div>
+          <div class="module-info">
+            <strong>7-Stage Payroll Processing Lifecycle</strong>
+            <span>Controlled execution state machine (Calculated, Verified, Approved) with immutable itemized slips.</span>
+          </div>
+        </div>
+        <div class="module-item">
+          <div class="module-icon">4</div>
+          <div class="module-info">
+            <strong>Attendance & Leave Administration</strong>
+            <span>Shift scheduling, web attendance punches, policy leave approvals, and automated LOP deduction.</span>
+          </div>
+        </div>
+        <div class="module-item">
+          <div class="module-icon">5</div>
+          <div class="module-info">
+            <strong>Compliance Reports & Access Control</strong>
+            <span>Head-wise salary summaries, immutable audit logging, and single-session database enforcement.</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="results-card">
+      <div class="kpi-box">
+        <div class="kpi-title">Automated Test Verification</div>
+        <div class="kpi-value">
+          166 / 166
+          <span class="kpi-sub">Tests Passed (100%)</span>
+        </div>
+        <div class="status-list">
+          <div class="status-row">
+            <span>Backend Vitest Test Suites (9/9)</span>
+            <span class="status-badge">All Passed</span>
+          </div>
+          <div class="status-row">
+            <span>TypeScript Typecheck (`tsc --noEmit`)</span>
+            <span class="status-badge">0 Errors</span>
+          </div>
+          <div class="status-row">
+            <span>Frontend Production Build (`vite build`)</span>
+            <span class="status-badge">Clean Build</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="kpi-box">
+        <div class="kpi-title">Live Security & Integrity Testing</div>
+        <div class="status-list">
+          <div class="status-row">
+            <span>Invalid Credentials Rejection</span>
+            <span class="status-badge">Enforced</span>
+          </div>
+          <div class="status-row">
+            <span>Protected Route Guards</span>
+            <span class="status-badge">Enforced</span>
+          </div>
+          <div class="status-row">
+            <span>Single Active Session Invalidation</span>
+            <span class="status-badge">Verified (HTTP 401)</span>
+          </div>
+          <div class="status-row">
+            <span>Mathematical CTC Variance</span>
+            <span class="status-badge">₹0.00 (Zero)</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div>Apex Global Technologies Pvt. Ltd. • Mumbai HQ • Bengaluru Tech Center</div>
+    <div>PayFlow ERP • Presentation & Evaluation Sign-Off</div>
+  </div>
+</body>
+</html>

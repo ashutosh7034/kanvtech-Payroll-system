@@ -29,15 +29,19 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers
   });
 
+  const data = await response.json().catch(() => null);
+
   if (response.status === 401) {
     localStorage.removeItem('pm_auth_token');
     localStorage.removeItem('pm_auth_user');
-    if (!window.location.pathname.includes('/login')) {
-      window.dispatchEvent(new Event('auth:unauthorized'));
+    if (data?.error?.code === 'SESSION_REVOKED') {
+      sessionStorage.setItem(
+        'pm_session_revoked_msg',
+        'Your session was terminated because this account logged in from another device or location.'
+      );
     }
+    window.dispatchEvent(new Event('auth:unauthorized'));
   }
-
-  const data = await response.json().catch(() => null);
 
   if (!response.ok) {
     throw new ApiError(
@@ -53,6 +57,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   get: <T>(path: string) => request<T>(path, { method: 'GET' }),
   post: <T>(path: string, body?: any) => request<T>(path, { method: 'POST', body: body ? JSON.stringify(body) : undefined }),
+  put: <T>(path: string, body?: any) => request<T>(path, { method: 'PUT', body: body ? JSON.stringify(body) : undefined }),
   patch: <T>(path: string, body?: any) => request<T>(path, { method: 'PATCH', body: body ? JSON.stringify(body) : undefined }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' })
 };

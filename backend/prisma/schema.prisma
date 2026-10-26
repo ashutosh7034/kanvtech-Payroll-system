@@ -11,1094 +11,1453 @@ datasource db {
 // 1. ENUMS
 // ==========================================
 
-enum CadreType {
-  TEACHING
-  NON_TEACHING
-  ADMINISTRATIVE
-  TECHNICAL
-}
-
 enum EmploymentType {
   PERMANENT
+  PROBATIONARY
   CONTRACTUAL
-  ADHOC
-  TEMPORARY
+  CONSULTANT
+  INTERN
+  PART_TIME
 }
 
-enum OuType {
-  CAMPUS
-  FACULTY
-  DIRECTORATE
-  REGIONAL_CENTRE
-  COLLEGE
+enum EmploymentStatus {
+  ACTIVE
+  PROBATION
+  CONFIRMED
+  NOTICE_PERIOD
+  SUSPENDED
+  EXITED
 }
 
-enum PayrollStatus {
-  GENERATED
-  VERIFIED
-  FINALIZED
-  APPROVED
-  RETURNED
-  REVERSED
+enum WorkMode {
+  OFFICE
+  REMOTE
+  HYBRID
 }
 
-enum PeriodStatus {
-  OPEN
-  PROCESSING
-  CLOSED
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
 }
 
-enum SalaryHeadType {
+enum ComponentType {
   EARNING
   DEDUCTION
-  EMPLOYER_CONTRIBUTION
+  EMPLOYER_STATUTORY
 }
 
-enum CalculationType {
-  FIXED
-  PERCENTAGE_OF_HEAD
-  FORMULA
+enum CalculationMode {
+  FIXED_AMOUNT
+  PERCENTAGE_OF_COMPONENT
+  FORMULA_EXPRESSION
 }
 
-enum TaxRegime {
-  OLD
-  NEW
+enum PunchSource {
+  WEB
+  BIOMETRIC
+  MOBILE
+  MANUAL
 }
 
-enum DeclarationStatus {
-  DRAFT
-  SUBMITTED
-  VERIFIED
-  REJECTED
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  HALF_DAY
+  WEEKLY_OFF
+  HOLIDAY
+  ON_LEAVE
 }
 
-enum LoanStatus {
-  APPLIED
+enum LeaveDurationType {
+  FULL_DAY
+  FIRST_HALF
+  SECOND_HALF
+}
+
+enum RequestStatus {
+  PENDING
   APPROVED
-  ACTIVE
-  COMPLETED
+  REJECTED
   CANCELLED
+  CORRECTION_REQUESTED
+  PAID
+}
+
+enum CorporatePayrollStatus {
+  DRAFT
+  VALIDATED
+  CALCULATED
+  REVIEWED
+  APPROVED
+  PAYMENT_READY
+  PAID
 }
 
 enum PaymentMethod {
   NEFT
   RTGS
-  PFMS
+  IMPS
   CHEQUE
-  CASH
+  UPI
 }
 
-enum PaymentBatchStatus {
+enum AssetCategory {
+  LAPTOP
+  DESKTOP
+  MOBILE
+  MONITOR
+  ACCESS_CARD
+  VEHICLE
+  OTHER
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  DAMAGED
+  LOST
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum CandidateStage {
+  APPLIED
+  SHORTLISTED
+  TECHNICAL_INTERVIEW
+  HR_INTERVIEW
+  OFFER_EXTENDED
+  HIRED
+  REJECTED
+}
+
+enum OfferStatus {
   DRAFT
-  GENERATED
-  EXPORTED
-  RECONCILED
+  SENT
+  ACCEPTED
+  DECLINED
 }
 
-enum GpfTransactionType {
-  MONTHLY_SUBSCRIPTION
-  ADDITIONAL_SUBSCRIPTION
-  ADVANCE_TAKEN
-  ADVANCE_RECOVERY
-  WITHDRAWAL
-  REFUND
-  ARREAR_DEPOSIT
-  INTEREST_CREDIT
-}
-
-enum GpfAccountStatus {
-  ACTIVE
-  TEMPORARILY_CLOSED
-  FINALLY_CLOSED
-}
-
-enum ImportJobStatus {
-  PENDING
-  VALIDATED
-  COMMITTED
-  FAILED
-}
-
-enum ImportType {
-  SALARY_CONFIG
-  PROGRESSION_DATES
-  RECURRING_DATA
-  ONE_TIME_DATA
-  CITY_CATEGORIES
-  ARREARS
-  PAY_MATRIX
-  PF_GPF
-  RUNNING_ADVANCES
+enum ReviewRating {
+  UNSATISFACTORY
+  NEEDS_IMPROVEMENT
+  MEETS_EXPECTATIONS
+  EXCEEDS_EXPECTATIONS
+  OUTSTANDING
 }
 
 // ==========================================
-// 2. TENANT, ORGANIZATION & ACCESS CONTROL
+// 2. MULTI-COMPANY & ORGANIZATION ENTITIES
 // ==========================================
 
-model Institution {
-  id              String           @id @default(cuid())
-  code            String           @unique
+model Company {
+  id              String      @id @default(uuid())
+  code            String      @unique
   name            String
   brandName       String?
-  logoUrl         String?
-  contactEmail    String?
-  currency        String           @default("INR")
-  currencySymbol  String           @default("₹")
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  legalName       String
+  cinNumber       String?
+  gstin           String?
+  panNumber       String?
+  tanNumber       String?
+  pfEstablishmentCode String?
+  esicCode        String?
+  ptrcNumber      String?
+  contactEmail    String
+  contactPhone    String?
+  website         String?
+  currency        String      @default("INR")
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  ous             OrganizationalUnit[]
+  branches        Branch[]
+  departments     Department[]
   designations    Designation[]
-  employeeGroups  EmployeeGroup[]
-  payrollGroups   ManagedPayrollGroup[]
-  users           User[]
+  jobBands        JobBand[]
+  costCenters     CostCenter[]
   employees       Employee[]
-  financialYears  FinancialYear[]
-  payBands        PayBand[]
-  payLevels       PayLevel[]
-  salaryHeads     SalaryHead[]
-  salaryStructures SalaryStructure[]
-  settings        InstitutionSetting[]
+  users           User[]
+  payrollPeriods  PayrollPeriod[]
+  payrollRuns     CorporatePayrollRun[]
+  salaryComponents SalaryComponent[]
+  salaryTemplates SalaryTemplate[]
+  shiftPolicies   ShiftPolicy[]
+  leavePolicies   LeavePolicy[]
+  statutoryConfig StatutoryConfig?
+  assets          CompanyAsset[]
+  jobOpenings     JobOpening[]
+  projects        Project[]
+  performanceCycles PerformanceCycle[]
+  trainingCourses TrainingCourse[]
+  expenseCategories ExpenseCategory[]
   loanTypes       LoanType[]
-  leaveTypes      LeaveType[]
-  arrearBatches   ArrearBatch[]
-  incrementBatches IncrementBatch[]
-  otherPaymentTypes OtherPaymentType[]
-  gpfInterestRates GpfInterestRate[]
-  paymentBatches  PaymentBatch[]
-  payrollRuns     PayrollRun[]
-  otherPayments   OtherPayment[]
-  importJobs      ImportJob[]
+  helpDeskCategories HelpDeskCategory[]
+  visitorPasses   VisitorPass[]
   auditLogs       AuditLog[]
+  customFields    CustomFieldDefinition[]
+  notifications   InAppNotification[]
 }
 
-model OrganizationalUnit {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String
-  name          String
-  type          OuType       @default(FACULTY)
-  parentOuId    String?
-  parentOu      OrganizationalUnit? @relation("OuHierarchy", fields: [parentOuId], references: [id])
-  childOus      OrganizationalUnit[] @relation("OuHierarchy")
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+model Branch {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  state           String
+  city            String
+  address         String?
+  pinCode         String?
+  isHeadquarters  Boolean     @default(false)
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  departments   Department[]
-  employees     Employee[]
-  userRoles     UserRole[]
-  payrollRuns   PayrollRun[]
+  employees       Employee[]
 
-  @@unique([institutionId, code])
-  @@index([institutionId, active])
+  @@unique([companyId, code])
 }
 
 model Department {
-  id        String             @id @default(cuid())
-  ouId      String
-  ou        OrganizationalUnit @relation(fields: [ouId], references: [id], onDelete: Restrict)
-  code      String
-  name      String
-  active    Boolean            @default(true)
-  createdAt DateTime           @default(now())
-  updatedAt DateTime           @updatedAt
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  employees Employee[]
+  employees       Employee[]
+  jobOpenings     JobOpening[]
 
-  @@unique([ouId, code])
+  @@unique([companyId, code])
 }
 
 model Designation {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String
-  name          String
-  cadre         CadreType    @default(NON_TEACHING)
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  employees     Employee[]
+  employees       Employee[]
+  jobOpenings     JobOpening[]
 
-  @@unique([institutionId, code])
+  @@unique([companyId, code])
 }
 
-model EmployeeGroup {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String
-  name          String       // Group A, Group B, Group C, Group D
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+model JobBand {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  minCtc          Decimal     @default(0) @db.Decimal(18, 2)
+  maxCtc          Decimal     @default(0) @db.Decimal(18, 2)
+  createdAt       DateTime    @default(now())
 
-  employees     Employee[]
+  employees       Employee[]
 
-  @@unique([institutionId, code])
+  @@unique([companyId, code])
 }
 
-model ManagedPayrollGroup {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String
-  name          String
-  description   String?
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+model CostCenter {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
 
-  employees     Employee[]
+  employees       Employee[]
 
-  @@unique([institutionId, code])
+  @@unique([companyId, code])
 }
+
+// ==========================================
+// 3. USERS, ROLES & AUDITING
+// ==========================================
 
 model User {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  employeeId    String?      @unique
-  employee      Employee?    @relation(fields: [employeeId], references: [id], onDelete: SetNull)
-  username      String       @unique
-  email         String       @unique
-  passwordHash  String
-  fullName      String
-  active        Boolean      @default(true)
-  lastLoginAt   DateTime?
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employeeId      String?     @unique
+  employee        Employee?   @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  username        String      @unique
+  email           String      @unique
+  passwordHash    String
+  fullName        String
+  active          Boolean     @default(true)
+  activeSessionId String?
+  lastLoginAt     DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
-  userRoles     UserRole[]
-  auditLogs     AuditLog[]
+  userRoles       UserRole[]
+  auditLogs       AuditLog[]
+  ticketComments  TicketComment[]
+  notifications   InAppNotification[]
 }
 
 model Role {
-  id          String     @id @default(cuid())
-  code        String     @unique // payroll_admin, payroll_admin_view, payroll_ou_admin, payroll_pcm, payroll_pda, payroll_pvo, payroll_pfo, payroll_ar_salary, payroll_incometax_admin, employee_self_service, platform_admin
-  name        String
-  description String?
-  userRoles   UserRole[]
+  id              String      @id @default(uuid())
+  name            String      @unique
+  description     String?
+  permissions     String[]    @default([])
+  createdAt       DateTime    @default(now())
+
+  userRoles       UserRole[]
 }
 
 model UserRole {
-  id        String              @id @default(cuid())
-  userId    String
-  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
-  roleId    String
-  role      Role                @relation(fields: [roleId], references: [id], onDelete: Restrict)
-  ouId      String?
-  ou        OrganizationalUnit? @relation(fields: [ouId], references: [id], onDelete: SetNull)
-  createdAt DateTime            @default(now())
+  id              String      @id @default(uuid())
+  userId          String
+  user            User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roleId          String
+  role            Role        @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  createdAt       DateTime    @default(now())
 
-  @@unique([userId, roleId, ouId])
+  @@unique([userId, roleId])
 }
 
 model AuditLog {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  userId        String?
-  user          User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
-  action        String       // LOGIN, GENERATE_PAYROLL, VERIFY_PAYROLL, APPROVE_PAYROLL, EXPORT_REPORT, etc.
-  entityType    String       // PayrollRun, Employee, GpfStatement, etc.
-  entityId      String?
-  details       Json?
-  ipAddress     String?
-  createdAt     DateTime     @default(now())
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId          String?
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action          String
+  entityType      String
+  entityId        String?
+  ipAddress       String?
+  userAgent       String?
+  metadata        Json?
+  createdAt       DateTime    @default(now())
 
-  @@index([institutionId, createdAt])
-  @@index([action, entityType])
-}
-
-model InstitutionSetting {
-  id            String      @id @default(cuid())
-  institutionId String
-  institution   Institution @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  key           String      // mask_pan, mask_bank, show_employer_contributions, etc.
-  value         String
-  description   String?
-  createdAt     DateTime    @default(now())
-  updatedAt     DateTime    @updatedAt
-
-  @@unique([institutionId, key])
+  @@index([companyId, action])
+  @@index([createdAt])
 }
 
 // ==========================================
-// 3. FINANCIAL YEARS & PAYROLL PERIODS
-// ==========================================
-
-model FinancialYear {
-  id            String        @id @default(cuid())
-  institutionId String
-  institution   Institution   @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  name          String        // e.g. "2026-2027"
-  startsOn      DateTime
-  endsOn        DateTime
-  active        Boolean       @default(false)
-  isClosed      Boolean       @default(false)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  periods       PayrollPeriod[]
-  payrollRuns   PayrollRun[]
-  taxProfiles   EmployeeTaxProfile[]
-  taxDeclarations TaxDeclaration[]
-  gpfStatements GpfStatement[]
-  gpfInterestRates GpfInterestRate[]
-  incrementBatches IncrementBatch[]
-  otherPayments OtherPayment[]
-
-  @@unique([institutionId, name])
-  @@index([institutionId, active])
-}
-
-model PayrollPeriod {
-  id              String        @id @default(cuid())
-  financialYearId String
-  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  periodNumber    Int           // 1 to 12
-  name            String        // "April 2026", etc.
-  startDate       DateTime
-  endDate         DateTime
-  payDate         DateTime
-  status          PeriodStatus  @default(OPEN)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  payrollRuns     PayrollRun[]
-  gpfTransactions GpfTransaction[]
-  otherPayments   OtherPayment[]
-
-  @@unique([financialYearId, periodNumber])
-  @@index([financialYearId, status])
-}
-
-// ==========================================
-// 4. PAY MATRIX & SALARY MASTERS
-// ==========================================
-
-model PayBand {
-  id            String         @id @default(cuid())
-  institutionId String
-  institution   Institution    @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String         // PB-1, PB-2, PB-3, PB-4
-  name          String
-  minimumAmount Decimal        @db.Decimal(18, 2)
-  maximumAmount Decimal        @db.Decimal(18, 2)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  gradeScales   GradePayScale[]
-
-  @@unique([institutionId, code])
-}
-
-model GradePayScale {
-  id             String      @id @default(cuid())
-  payBandId      String
-  payBand        PayBand     @relation(fields: [payBandId], references: [id], onDelete: Restrict)
-  code           String      // GP 1800, GP 4200, etc.
-  name           String
-  gradePayAmount Decimal     @db.Decimal(18, 2)
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
-
-  @@unique([payBandId, code])
-}
-
-model PayLevel {
-  id            String         @id @default(cuid())
-  institutionId String
-  institution   Institution    @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  levelNumber   Int            // 1 to 14 (7th Pay Commission)
-  name          String         // "Level 1", "Level 10", etc.
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
-
-  matrixCells   PayMatrixCell[]
-  assignments   EmployeeSalaryAssignment[]
-
-  @@unique([institutionId, levelNumber])
-}
-
-model PayMatrixCell {
-  id          String     @id @default(cuid())
-  payLevelId  String
-  payLevel    PayLevel   @relation(fields: [payLevelId], references: [id], onDelete: Restrict)
-  indexNumber Int        // Index 1 to 40 (steps)
-  basicAmount Decimal    @db.Decimal(18, 2)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  assignments EmployeeSalaryAssignment[]
-  currIncrements EmployeeIncrement[] @relation("CurrentCell")
-  nextIncrements EmployeeIncrement[] @relation("NextCell")
-
-  @@unique([payLevelId, indexNumber])
-}
-
-model SalaryHead {
-  id              String          @id @default(cuid())
-  institutionId   String
-  institution     Institution     @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code            String          // BASIC, DA, HRA, TA, NPA, EPF, GPF, NPS, TDS, PT, GIS, etc.
-  name            String
-  type            SalaryHeadType
-  calculationType CalculationType @default(FIXED)
-  formulaConfig   Json?           // percentage, baseHeadCode, cityCategory rates, etc.
-  isTaxable       Boolean         @default(true)
-  isLeaveImpacted Boolean         @default(true)
-  active          Boolean         @default(true)
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
-
-  structureLines  SalaryStructureLine[]
-  payrollLines    PayrollLine[]
-
-  @@unique([institutionId, code])
-}
-
-model SalaryStructure {
-  id              String               @id @default(cuid())
-  institutionId   String
-  institution     Institution          @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code            String               // e.g. "REG_7CPC_TEACHING"
-  name            String
-  employmentType  EmploymentType       @default(PERMANENT)
-  active          Boolean              @default(true)
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-
-  lines           SalaryStructureLine[]
-  assignments     EmployeeSalaryAssignment[]
-
-  @@unique([institutionId, code])
-}
-
-model SalaryStructureLine {
-  id             String          @id @default(cuid())
-  structureId    String
-  structure      SalaryStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
-  salaryHeadId   String
-  salaryHead     SalaryHead      @relation(fields: [salaryHeadId], references: [id], onDelete: Restrict)
-  calculationType CalculationType @default(FIXED)
-  baseHeadCode   String?         // e.g. "BASIC" for DA, "BASIC+DA" for HRA
-  percentage     Decimal?        @db.Decimal(8, 4) // e.g. 50.0000%
-  fixedAmount    Decimal?        @db.Decimal(18, 2)
-  displayOrder   Int             @default(0)
-
-  @@unique([structureId, salaryHeadId])
-}
-
-// ==========================================
-// 5. EMPLOYEE PROFILE & SALARY ASSIGNMENT
+// 4. CORE HRIS & EMPLOYEE MASTER
 // ==========================================
 
 model Employee {
-  id                  String               @id @default(cuid())
-  institutionId       String
-  institution         Institution          @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  ouId                String
-  ou                  OrganizationalUnit   @relation(fields: [ouId], references: [id], onDelete: Restrict)
-  departmentId        String
-  department          Department           @relation(fields: [departmentId], references: [id], onDelete: Restrict)
-  designationId       String
-  designation         Designation          @relation(fields: [designationId], references: [id], onDelete: Restrict)
-  employeeGroupId     String
-  employeeGroup       EmployeeGroup        @relation(fields: [employeeGroupId], references: [id], onDelete: Restrict)
-  managedPayrollGroupId String?
-  managedPayrollGroup ManagedPayrollGroup? @relation(fields: [managedPayrollGroupId], references: [id], onDelete: SetNull)
+  id              String            @id @default(uuid())
+  companyId       String
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId        String
+  branch          Branch            @relation(fields: [branchId], references: [id])
+  departmentId    String
+  department      Department        @relation(fields: [departmentId], references: [id])
+  designationId   String
+  designation     Designation       @relation(fields: [designationId], references: [id])
+  jobBandId       String?
+  jobBand         JobBand?          @relation(fields: [jobBandId], references: [id])
+  costCenterId    String?
+  costCenter      CostCenter?       @relation(fields: [costCenterId], references: [id])
+  managerId       String?
+  manager         Employee?         @relation("ReportingManager", fields: [managerId], references: [id])
+  directReports   Employee[]        @relation("ReportingManager")
 
-  employeeCode        String
-  firstName           String
-  middleName          String?
-  lastName            String
-  gender              String?              // Male, Female, Other
-  dateOfBirth         DateTime?
-  dateOfJoining       DateTime
-  dateOfRetirement    DateTime?
-  employmentType      EmploymentType       @default(PERMANENT)
-  email               String?
-  phone               String?
-  pan                 String?
-  maskedPan           String?
-  aadhaarLast4        String?
-  cityCategory        String?              // X, Y, Z for HRA / TA calculation
-  active              Boolean              @default(true)
-  createdAt           DateTime             @default(now())
-  updatedAt           DateTime             @updatedAt
+  employeeCode    String            @unique
+  firstName       String
+  lastName        String
+  workEmail       String            @unique
+  personalEmail   String?
+  phone           String?
+  dateOfBirth     DateTime?
+  gender          Gender            @default(MALE)
+  maritalStatus   String?
+  bloodGroup      String?
+  emergencyContactName String?
+  emergencyContactPhone String?
+  addressLine1    String?
+  city            String?
+  state           String?
+  pinCode         String?
 
-  user                User?
-  bankAccounts        EmployeeBankAccount[]
-  salaryAssignments   EmployeeSalaryAssignment[]
-  taxProfiles         EmployeeTaxProfile[]
-  taxDeclarations     TaxDeclaration[]
-  loans               EmployeeLoan[]
-  leaveRecords        EmployeeLeaveRecord[]
-  increments          EmployeeIncrement[]
-  payFixations        PayFixation[]
-  otherPayments       OtherPayment[]
-  gpfAccount          GpfAccount?
-  payrollRecords      PayrollRecord[]
-  arrearRecords       ArrearRecord[]
+  employmentType  EmploymentType    @default(PERMANENT)
+  status          EmploymentStatus  @default(PROBATION)
+  workMode        WorkMode          @default(OFFICE)
+  dateOfJoining   DateTime
+  probationDays   Int               @default(90)
+  confirmationDate DateTime?
+  noticePeriodDays Int              @default(60)
+  exitDate        DateTime?
 
-  @@unique([institutionId, employeeCode])
-  @@index([institutionId, ouId, active])
+  panNumber       String?
+  uanNumber       String?
+  pfNumber        String?
+  esicNumber      String?
+  aadhaarMasked   String?
+
+  bankName        String?
+  bankAccountNumber String?
+  ifscCode        String?
+  bankBranch      String?
+
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user            User?
+  documents       EmployeeDocument[]
+  timeline        EmploymentTimeline[]
+  salaryStructure EmployeeSalaryStructure?
+  salaryRevisions EmployeeSalaryRevision[]
+  payrollPolicy   EmployeePayrollPolicy?
+  punches         AttendancePunch[]
+  dailyAttendance DailyAttendance[]
+  regularizations AttendanceRegularization[]
+  leaveBalances   EmployeeLeaveBalance[]
+  leaveRequests   LeaveRequest[]
+  payrollSlips    CorporatePayrollSlip[]
+  expenseClaims   ExpenseClaim[]
+  travelRequests  TravelRequest[]
+  timesheetEntries TimesheetEntry[]
+  projectAllocations ProjectAllocation[]
+  goals           EmployeeGoal[]
+  reviews         PerformanceReview[]
+  nominations     TrainingNomination[]
+  loans           EmployeeLoan[]
+  allocatedAssets AssetAllocation[]
+  helpDeskTickets HelpDeskTicket[]
+  resignation     Resignation?
+  fnfSettlement   FnfSettlement?
+  onboardingTasks EmployeeOnboardingTask[]
+  shiftRosters    ShiftRoster[]
+  taxDeclarations EmployeeTaxDeclaration[]
+  customFieldValues EmployeeCustomFieldValue[]
+
+  @@index([companyId, status])
+  @@index([departmentId])
+  @@index([branchId])
 }
 
-model EmployeeBankAccount {
-  id            String        @id @default(cuid())
-  employeeId    String
-  employee      Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  bankName      String
-  branchName    String?
-  accountNumber String
-  maskedAccount String
-  ifscCode      String
-  paymentMode   PaymentMethod @default(NEFT)
-  isPrimary     Boolean       @default(true)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  @@index([employeeId, isPrimary])
-}
-
-model EmployeeSalaryAssignment {
-  id              String          @id @default(cuid())
+model EmployeeDocument {
+  id              String      @id @default(uuid())
   employeeId      String
+  employee        Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  category        String
+  fileName        String
+  fileUrl         String
+  expiryDate      DateTime?
+  isVerified      Boolean     @default(false)
+  uploadedAt      DateTime    @default(now())
+}
+
+model EmploymentTimeline {
+  id              String      @id @default(uuid())
+  employeeId      String
+  employee        Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  eventType       String
+  title           String
+  description     String?
+  effectiveDate   DateTime
+  recordedBy      String?
+  createdAt       DateTime    @default(now())
+}
+
+// ==========================================
+// 5. RECRUITMENT & ATS
+// ==========================================
+
+model JobOpening {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departmentId    String
+  department      Department  @relation(fields: [departmentId], references: [id])
+  designationId   String
+  designation     Designation @relation(fields: [designationId], references: [id])
+  title           String
+  openingsCount   Int         @default(1)
+  minExperience   Int         @default(0)
+  budgetMin       Decimal     @default(0) @db.Decimal(18, 2)
+  budgetMax       Decimal     @default(0) @db.Decimal(18, 2)
+  description     String?
+  status          String      @default("OPEN")
+  createdAt       DateTime    @default(now())
+
+  applications    JobApplication[]
+}
+
+model Candidate {
+  id              String      @id @default(uuid())
+  fullName        String
+  email           String      @unique
+  phone           String?
+  currentCompany  String?
+  currentCtc      Decimal?    @db.Decimal(18, 2)
+  expectedCtc     Decimal?    @db.Decimal(18, 2)
+  noticePeriodDays Int?
+  resumeUrl       String?
+  createdAt       DateTime    @default(now())
+
+  applications    JobApplication[]
+}
+
+model JobApplication {
+  id              String          @id @default(uuid())
+  jobOpeningId    String
+  jobOpening      JobOpening      @relation(fields: [jobOpeningId], references: [id], onDelete: Cascade)
+  candidateId     String
+  candidate       Candidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  stage           CandidateStage  @default(APPLIED)
+  notes           String?
+  appliedAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  interviews      Interview[]
+  offer           JobOffer?
+
+  @@unique([jobOpeningId, candidateId])
+}
+
+model Interview {
+  id              String          @id @default(uuid())
+  jobApplicationId String
+  jobApplication  JobApplication  @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  roundName       String
+  scheduledAt     DateTime
+  interviewerName String
+  interviewerEmail String?
+  score           Int?
+  feedback        String?
+  status          String          @default("SCHEDULED")
+}
+
+model JobOffer {
+  id              String          @id @default(uuid())
+  jobApplicationId String         @unique
+  jobApplication  JobApplication  @relation(fields: [jobApplicationId], references: [id], onDelete: Cascade)
+  offeredCtc      Decimal         @db.Decimal(18, 2)
+  joiningDate     DateTime
+  offerStatus     OfferStatus     @default(DRAFT)
+  offerLetterUrl  String?
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 6. ONBOARDING
+// ==========================================
+
+model OnboardingChecklist {
+  id              String      @id @default(uuid())
+  title           String
+  category        String
+  defaultDueDays  Int         @default(7)
+  createdAt       DateTime    @default(now())
+}
+
+model EmployeeOnboardingTask {
+  id              String      @id @default(uuid())
+  employeeId      String
+  employee        Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title           String
+  category        String
+  dueDate         DateTime
+  isCompleted     Boolean     @default(false)
+  completedAt     DateTime?
+}
+
+// ==========================================
+// 7. COMPENSATION & CTC BUILDER
+// ==========================================
+
+model SalaryComponent {
+  id                String          @id @default(uuid())
+  companyId         String
+  company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code              String
+  name              String
+  type              ComponentType
+  category          String          @default("FIXED_EARNING")
+  calculationMode   CalculationMode @default(FIXED_AMOUNT)
+  formulaExpression String?
+  baseComponentCode String?
+  percentageValue   Decimal?        @db.Decimal(7, 4)
+  fixedAmount       Decimal?        @db.Decimal(18, 2)
+  minLimit          Decimal?        @db.Decimal(18, 2)
+  maxLimit          Decimal?        @db.Decimal(18, 2)
+  roundPolicy       String          @default("ROUND_HALF_UP")
+  isTaxable         Boolean         @default(true)
+  isPfGross         Boolean         @default(false)
+  isEsicGross       Boolean         @default(false)
+  isPtGross         Boolean         @default(false)
+  affectsGross      Boolean         @default(true)
+  affectsNet        Boolean         @default(true)
+  affectsCtc        Boolean         @default(true)
+  payslipVisibility Boolean         @default(true)
+  active            Boolean         @default(true)
+  displayOrder      Int             @default(0)
+  createdAt         DateTime        @default(now())
+
+  templateLines     SalaryTemplateLine[]
+  structureLines    EmployeeSalaryLine[]
+
+  @@unique([companyId, code])
+}
+
+model SalaryTemplate {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String?
+  name            String
+  description     String?
+  version         Int             @default(1)
+  isDefault       Boolean         @default(false)
+  active          Boolean         @default(true)
+  effectiveFrom   DateTime        @default(now())
+  effectiveTo     DateTime?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  lines           SalaryTemplateLine[]
+  structures      EmployeeSalaryStructure[]
+
+  @@unique([companyId, code])
+}
+
+model SalaryTemplateLine {
+  id                String          @id @default(uuid())
+  templateId        String
+  template          SalaryTemplate  @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  componentId       String
+  component         SalaryComponent @relation(fields: [componentId], references: [id])
+  calculationMode   CalculationMode
+  percentageOfBasic Decimal?        @db.Decimal(7, 4)
+  percentageValue   Decimal?        @db.Decimal(7, 4)
+  fixedAmount       Decimal?        @db.Decimal(18, 2)
+  formulaExpression String?
+  baseComponentCode String?
+  displayOrder      Int             @default(0)
+}
+
+model EmployeeSalaryStructure {
+  id              String          @id @default(uuid())
+  employeeId      String          @unique
   employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  structureId     String
-  structure       SalaryStructure @relation(fields: [structureId], references: [id], onDelete: Restrict)
-  payLevelId      String?
-  payLevel        PayLevel?       @relation(fields: [payLevelId], references: [id], onDelete: SetNull)
-  payMatrixCellId String?
-  payMatrixCell   PayMatrixCell?  @relation(fields: [payMatrixCellId], references: [id], onDelete: SetNull)
-  basicPay        Decimal         @db.Decimal(18, 2)
+  templateId      String?
+  template        SalaryTemplate? @relation(fields: [templateId], references: [id])
+  annualCtc       Decimal         @db.Decimal(18, 2)
+  monthlyGross    Decimal         @db.Decimal(18, 2)
   effectiveFrom   DateTime
   effectiveTo     DateTime?
+  version         Int             @default(1)
+  revisionReason  String?
   active          Boolean         @default(true)
   createdAt       DateTime        @default(now())
   updatedAt       DateTime        @updatedAt
 
-  @@index([employeeId, active])
+  lines           EmployeeSalaryLine[]
 }
 
-model EmployeeTaxProfile {
-  id              String        @id @default(cuid())
+model EmployeeSalaryLine {
+  id              String          @id @default(uuid())
+  structureId     String
+  structure       EmployeeSalaryStructure @relation(fields: [structureId], references: [id], onDelete: Cascade)
+  componentId     String
+  component       SalaryComponent @relation(fields: [componentId], references: [id])
+  monthlyAmount   Decimal         @db.Decimal(18, 2)
+  annualAmount    Decimal         @db.Decimal(18, 2)
+}
+
+model EmployeeSalaryRevision {
+  id              String          @id @default(uuid())
   employeeId      String
-  employee        Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  financialYearId String
-  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  regime          TaxRegime     @default(NEW)
-  active          Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  @@unique([employeeId, financialYearId])
-}
-
-// ==========================================
-// 6. PAYROLL ENGINE & APPROVAL WORKFLOW
-// ==========================================
-
-model PayrollRun {
-  id              String              @id @default(cuid())
-  institutionId   String
-  institution     Institution         @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  ouId            String?
-  ou              OrganizationalUnit? @relation(fields: [ouId], references: [id], onDelete: SetNull)
-  financialYearId String
-  financialYear   FinancialYear       @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  periodId        String
-  period          PayrollPeriod       @relation(fields: [periodId], references: [id], onDelete: Restrict)
-  status          PayrollStatus       @default(GENERATED)
-  version         Int                 @default(1)
-  totalEmployees  Int                 @default(0)
-  grossTotal      Decimal             @default(0) @db.Decimal(18, 2)
-  deductionsTotal Decimal             @default(0) @db.Decimal(18, 2)
-  netTotal        Decimal             @default(0) @db.Decimal(18, 2)
-
-  generatedBy     String
-  verifiedBy      String?
-  finalizedBy     String?
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  annualCtc       Decimal         @db.Decimal(18, 2)
+  monthlyGross    Decimal         @db.Decimal(18, 2)
+  effectiveFrom   DateTime
+  effectiveTo     DateTime?
+  revisionReason  String?
   approvedBy      String?
-  verifiedAt      DateTime?
-  finalizedAt     DateTime?
-  approvedAt      DateTime?
-  remarks         String?
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
+  snapshot        Json
+  createdAt       DateTime        @default(now())
 
-  records         PayrollRecord[]
-  transitions     PayrollTransition[]
-  paymentBatches  PaymentBatch[]
-
-  @@unique([institutionId, periodId, version])
-  @@index([institutionId, periodId, status])
+  @@index([employeeId, effectiveFrom])
 }
 
-model PayrollRecord {
-  id                 String        @id @default(cuid())
-  payrollRunId       String
-  payrollRun         PayrollRun    @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  employeeId         String
-  employee           Employee      @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  workingDays        Int           @default(30)
-  payableDays        Int           @default(30)
-  leaveLossOfPayDays Decimal       @default(0) @db.Decimal(5, 2)
-  basicPay           Decimal       @db.Decimal(18, 2)
-  grossAmount        Decimal       @db.Decimal(18, 2)
-  deductionAmount    Decimal       @db.Decimal(18, 2)
-  netAmount          Decimal       @db.Decimal(18, 2)
-  currency           String        @default("INR")
-  calculationSnapshot Json         // Complete audit breakdown of inputs, rules, formula outputs
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+model EmployeePayrollPolicy {
+  id              String          @id @default(uuid())
+  employeeId      String          @unique
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  pfApplicable    Boolean         @default(true)
+  pfStatus        String          @default("APPLICABLE")
+  pfWageBasis     String          @default("CEILING_15000")
+  pfNumber        String?
+  uanNumber       String?
+  esiApplicable   Boolean         @default(false)
+  esiStatus       String          @default("EXEMPT_OVER_CEILING")
+  esiNumber       String?
+  ptApplicable    Boolean         @default(true)
+  ptState         String          @default("Maharashtra")
+  taxRegime       String          @default("NEW")
+  tdsMonthlyOverride Decimal?     @db.Decimal(18, 2)
+  paymentMode     PaymentMethod   @default(NEFT)
+  payrollFrequency String         @default("MONTHLY")
+  effectiveFrom   DateTime        @default(now())
+  effectiveTo     DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  exceptionRemarks String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+}
 
-  lines              PayrollLine[]
-  loanRecoveries     LoanRecovery[]
+// ==========================================
+// 8. ATTENDANCE & SHIFTS
+// ==========================================
+
+model ShiftPolicy {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  startTime       String
+  endTime         String
+  graceMinutes    Int             @default(15)
+  halfDayMinutes  Int             @default(240)
+  fullDayMinutes  Int             @default(480)
+  createdAt       DateTime        @default(now())
+
+  dailyAttendances DailyAttendance[]
+  shiftRosters    ShiftRoster[]
+
+  @@unique([companyId, code])
+}
+
+model ShiftRoster {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shiftPolicyId   String
+  shiftPolicy     ShiftPolicy     @relation(fields: [shiftPolicyId], references: [id])
+  rosterDate      DateTime
+
+  @@unique([employeeId, rosterDate])
+}
+
+model AttendancePunch {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  punchTime       DateTime
+  punchType       String
+  source          PunchSource     @default(WEB)
+  ipAddress       String?
+  deviceCode      String?
+  createdAt       DateTime        @default(now())
+
+  @@index([employeeId, punchTime])
+}
+
+model DailyAttendance {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date            DateTime
+  status          AttendanceStatus @default(PRESENT)
+  shiftPolicyId   String?
+  shiftPolicy     ShiftPolicy?    @relation(fields: [shiftPolicyId], references: [id])
+  firstIn         DateTime?
+  lastOut         DateTime?
+  workingHours    Decimal         @default(0) @db.Decimal(5, 2)
+  lateMinutes     Int             @default(0)
+  overtimeMinutes Int             @default(0)
+  isLocked        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+
+  @@unique([employeeId, date])
+}
+
+model AttendanceRegularization {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  attendanceDate  DateTime
+  reasonCode      String
+  reasonNotes     String
+  requestedStatus AttendanceStatus
+  status          RequestStatus   @default(PENDING)
+  approvedBy      String?
+  actionedAt      DateTime?
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 9. LEAVE MANAGEMENT
+// ==========================================
+
+model LeavePolicy {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  annualQuota     Decimal         @db.Decimal(5, 2)
+  isPaid          Boolean         @default(true)
+  maxCarryForward Decimal         @default(0) @db.Decimal(5, 2)
+  encashable      Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+
+  balances        EmployeeLeaveBalance[]
+  requests        LeaveRequest[]
+
+  @@unique([companyId, code])
+}
+
+model EmployeeLeaveBalance {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leavePolicyId   String
+  leavePolicy     LeavePolicy     @relation(fields: [leavePolicyId], references: [id])
+  calendarYear    Int
+  credited        Decimal         @db.Decimal(5, 2)
+  used            Decimal         @default(0) @db.Decimal(5, 2)
+  balance         Decimal         @db.Decimal(5, 2)
+  updatedAt       DateTime        @updatedAt
+
+  @@unique([employeeId, leavePolicyId, calendarYear])
+}
+
+model LeaveRequest {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leavePolicyId   String
+  leavePolicy     LeavePolicy     @relation(fields: [leavePolicyId], references: [id])
+  fromDate        DateTime
+  toDate          DateTime
+  durationType    LeaveDurationType @default(FULL_DAY)
+  totalDays       Decimal         @db.Decimal(4, 2)
+  reason          String
+  status          RequestStatus   @default(PENDING)
+  approvedBy      String?
+  actionedAt      DateTime?
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 10. CORPORATE PAYROLL ENGINE (7 STAGES)
+// ==========================================
+
+model PayrollPeriod {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  periodNumber    Int
+  name            String
+  month           Int
+  year            Int
+  startDate       DateTime
+  endDate         DateTime
+  cutoffDate      DateTime
+  isLocked        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+
+  runs            CorporatePayrollRun[]
+
+  @@unique([companyId, month, year])
+}
+
+model CorporatePayrollRun {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  periodId        String
+  period          PayrollPeriod   @relation(fields: [periodId], references: [id])
+  runNumber       String          @unique
+  status          CorporatePayrollStatus @default(DRAFT)
+  totalEmployees  Int             @default(0)
+  totalGross      Decimal         @default(0) @db.Decimal(18, 2)
+  totalDeductions Decimal         @default(0) @db.Decimal(18, 2)
+  totalNetPay     Decimal         @default(0) @db.Decimal(18, 2)
+  totalEmployerCost Decimal       @default(0) @db.Decimal(18, 2)
+  validatedBy     String?
+  validatedAt     DateTime?
+  calculatedAt    DateTime?
+  reviewedBy      String?
+  reviewedAt      DateTime?
+  approvedBy      String?
+  approvedAt      DateTime?
+  paidAt          DateTime?
+  paymentReference String?
+  validationNotes Json?
+  varianceNotes   Json?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  slips           CorporatePayrollSlip[]
+  transitions     CorporatePayrollTransition[]
+  emailDispatches PayslipDispatchRecord[]
+}
+
+model CorporatePayrollSlip {
+  id              String          @id @default(uuid())
+  payrollRunId    String
+  payrollRun      CorporatePayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id])
+  workingDays     Int             @default(30)
+  payableDays     Decimal         @db.Decimal(5, 2)
+  lopDays         Decimal         @default(0) @db.Decimal(5, 2)
+  unpaidDays      Decimal         @default(0) @db.Decimal(5, 2)
+  arrearsAmount   Decimal         @default(0) @db.Decimal(18, 2)
+  reimbursementAmount Decimal     @default(0) @db.Decimal(18, 2)
+  variableEarnings Decimal        @default(0) @db.Decimal(18, 2)
+  pfWageBasis     Decimal         @default(0) @db.Decimal(18, 2)
+  esiWageBasis    Decimal         @default(0) @db.Decimal(18, 2)
+  ptWageBasis     Decimal         @default(0) @db.Decimal(18, 2)
+  grossPay        Decimal         @db.Decimal(18, 2)
+  deductionsPay   Decimal         @db.Decimal(18, 2)
+  netPay          Decimal         @db.Decimal(18, 2)
+  employerCost    Decimal         @db.Decimal(18, 2)
+  calculationSnapshot Json
+  createdAt       DateTime        @default(now())
+
+  items           CorporatePayrollItem[]
+  emailDispatches PayslipDispatchRecord[]
 
   @@unique([payrollRunId, employeeId])
-  @@index([employeeId, createdAt])
 }
 
-model PayrollLine {
-  id              String        @id @default(cuid())
-  payrollRecordId String
-  payrollRecord   PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Cascade)
-  salaryHeadId    String
-  salaryHead      SalaryHead    @relation(fields: [salaryHeadId], references: [id], onDelete: Restrict)
-  headCode        String
-  headName        String
-  headType        SalaryHeadType
-  amount          Decimal       @db.Decimal(18, 2)
-  ruleVersion     String?
-  formulaNote     String?
-
-  @@index([payrollRecordId, headType])
+model CorporatePayrollItem {
+  id              String          @id @default(uuid())
+  payrollSlipId   String
+  payrollSlip     CorporatePayrollSlip @relation(fields: [payrollSlipId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  type            ComponentType
+  amount          Decimal         @db.Decimal(18, 2)
 }
 
-model PayrollTransition {
-  id           String        @id @default(cuid())
-  payrollRunId String
-  payrollRun   PayrollRun    @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
-  fromStatus   PayrollStatus
-  toStatus     PayrollStatus
-  actorId      String
-  actorName    String
-  actorRole    String
-  remarks      String?
-  createdAt    DateTime      @default(now())
-
-  @@index([payrollRunId, createdAt])
-}
-
-// ==========================================
-// 7. INCOME TAX MODULE
-// ==========================================
-
-model TaxSection {
-  id             String            @id @default(cuid())
-  sectionCode    String            @unique // 80C, 80D, 24B, 80CCD, STANDARD_DEDUCTION
-  name           String
-  description    String?
-  maxLimit       Decimal           @db.Decimal(18, 2)
-  regimeAllowed  TaxRegime         @default(OLD)
-  createdAt      DateTime          @default(now())
-
-  declarations   TaxDeclaration[]
-}
-
-model TaxDeclaration {
-  id              String            @id @default(cuid())
-  employeeId      String
-  employee        Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  financialYearId String
-  financialYear   FinancialYear     @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  sectionId       String
-  section         TaxSection        @relation(fields: [sectionId], references: [id], onDelete: Restrict)
-  declaredAmount  Decimal           @db.Decimal(18, 2)
-  verifiedAmount  Decimal?          @db.Decimal(18, 2)
-  status          DeclarationStatus @default(DRAFT)
+model CorporatePayrollTransition {
+  id              String          @id @default(uuid())
+  payrollRunId    String
+  payrollRun      CorporatePayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  fromStatus      CorporatePayrollStatus
+  toStatus        CorporatePayrollStatus
+  actorName       String
+  actorRole       String
   remarks         String?
-  documentUrls    Json?             // Array of uploaded proofs
-  submittedAt     DateTime?
-  verifiedAt      DateTime?
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
+  timestamp       DateTime        @default(now())
+}
 
-  @@unique([employeeId, financialYearId, sectionId])
-  @@index([employeeId, financialYearId])
+model PayslipDispatchRecord {
+  id              String          @id @default(uuid())
+  payrollRunId    String
+  payrollRun      CorporatePayrollRun @relation(fields: [payrollRunId], references: [id], onDelete: Cascade)
+  payrollSlipId   String
+  payrollSlip     CorporatePayrollSlip @relation(fields: [payrollSlipId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employeeCode    String
+  recipientEmail  String
+  status          String          // "DELIVERED" | "FAILED" | "SKIPPED"
+  messageId       String?
+  attemptCount    Int             @default(1)
+  errorDetails    String?
+  dispatchedAt    DateTime        @default(now())
+  provider        String          @default("smtp") // "smtp" | "mock" | "console"
+
+  @@index([payrollRunId, status])
+  @@index([payrollSlipId])
+  @@unique([payrollRunId, employeeId])
 }
 
 // ==========================================
-// 8. LOANS & ADVANCES
+// 11. STATUTORY COMPLIANCE & TAX
+// ==========================================
+
+model StatutoryConfig {
+  id              String          @id @default(uuid())
+  companyId       String          @unique
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  pfWageCeiling   Decimal         @default(15000) @db.Decimal(18, 2)
+  pfEmployeePct   Decimal         @default(12.0) @db.Decimal(5, 2)
+  pfEmployerEpfsPct Decimal       @default(3.67) @db.Decimal(5, 2)
+  pfEmployerEpsPct Decimal        @default(8.33) @db.Decimal(5, 2)
+  esicWageCeiling Decimal         @default(21000) @db.Decimal(18, 2)
+  esicEmployeePct Decimal         @default(0.75) @db.Decimal(5, 2)
+  esicEmployerPct Decimal         @default(3.25) @db.Decimal(5, 2)
+  gratuityPct     Decimal         @default(4.81) @db.Decimal(5, 2)
+  updatedAt       DateTime        @updatedAt
+}
+
+model ProfessionalTaxSlab {
+  id              String          @id @default(uuid())
+  state           String
+  minSalary       Decimal         @db.Decimal(18, 2)
+  maxSalary       Decimal?        @db.Decimal(18, 2)
+  monthlyAmount   Decimal         @db.Decimal(18, 2)
+  februaryAmount  Decimal?        @db.Decimal(18, 2)
+
+  @@index([state])
+}
+
+model EmployeeTaxDeclaration {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  financialYear   String
+  regime          String          @default("NEW")
+  section80C      Decimal         @default(0) @db.Decimal(18, 2)
+  section80D      Decimal         @default(0) @db.Decimal(18, 2)
+  section24b      Decimal         @default(0) @db.Decimal(18, 2)
+  hraRentPaid     Decimal         @default(0) @db.Decimal(18, 2)
+  status          String          @default("SUBMITTED")
+  submittedAt     DateTime        @default(now())
+}
+
+// ==========================================
+// 12. EXPENSES, TRAVEL & TIMESHEETS
+// ==========================================
+
+model ExpenseCategory {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  maxLimit        Decimal?        @db.Decimal(18, 2)
+  requiresReceipt Boolean         @default(true)
+
+  items           ExpenseItem[]
+
+  @@unique([companyId, code])
+}
+
+model ExpenseClaim {
+  id              String          @id @default(uuid())
+  claimNumber     String?
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  claimType       String?         @default("EXPENSE") // 'EXPENSE' | 'REIMBURSEMENT'
+  title           String
+  claimDate       DateTime
+  totalAmount     Decimal         @db.Decimal(18, 2)
+  status          RequestStatus   @default(PENDING)
+  approvedBy      String?
+  actionedAt      DateTime?
+  rejectionReason String?
+  resubmittedAt   DateTime?
+  correctionNotes String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @default(now()) @updatedAt
+
+  items           ExpenseItem[]
+
+  @@index([claimNumber])
+  @@index([employeeId, status])
+  @@index([claimType])
+}
+
+model ExpenseItem {
+  id              String          @id @default(uuid())
+  expenseClaimId  String
+  expenseClaim    ExpenseClaim    @relation(fields: [expenseClaimId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        ExpenseCategory @relation(fields: [categoryId], references: [id])
+  amount          Decimal         @db.Decimal(18, 2)
+  receiptUrl      String?
+  description     String?
+}
+
+model TravelRequest {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  purpose         String
+  destination     String
+  fromDate        DateTime
+  toDate          DateTime
+  estimatedBudget Decimal         @db.Decimal(18, 2)
+  advanceAmount   Decimal         @default(0) @db.Decimal(18, 2)
+  status          RequestStatus   @default(PENDING)
+  createdAt       DateTime        @default(now())
+}
+
+model Project {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  clientName      String?
+  status          String          @default("ACTIVE")
+  createdAt       DateTime        @default(now())
+
+  allocations     ProjectAllocation[]
+  timesheets      TimesheetEntry[]
+
+  @@unique([companyId, code])
+}
+
+model ProjectAllocation {
+  id              String          @id @default(uuid())
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  allocatedHours  Int             @default(40)
+
+  @@unique([projectId, employeeId])
+}
+
+model TimesheetEntry {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  projectId       String
+  project         Project         @relation(fields: [projectId], references: [id])
+  date            DateTime
+  hours           Decimal         @db.Decimal(4, 2)
+  taskDescription String
+  isBillable      Boolean         @default(true)
+  status          RequestStatus   @default(PENDING)
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 13. PERFORMANCE MANAGEMENT (PMS)
+// ==========================================
+
+model PerformanceCycle {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  year            Int
+  startDate       DateTime
+  endDate         DateTime
+  status          String          @default("ACTIVE")
+  createdAt       DateTime        @default(now())
+
+  goals           EmployeeGoal[]
+  reviews         PerformanceReview[]
+}
+
+model EmployeeGoal {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycleId         String
+  cycle           PerformanceCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  weightage       Int             @default(20)
+  targetMetric    String?
+  progressPct     Int             @default(0)
+  createdAt       DateTime        @default(now())
+}
+
+model PerformanceReview {
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycleId         String
+  cycle           PerformanceCycle @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  selfScore       Int?
+  selfComments    String?
+  managerScore    Int?
+  managerComments String?
+  rating          ReviewRating?
+  promotionRecommended Boolean    @default(false)
+  incrementPct    Decimal?        @db.Decimal(5, 2)
+  status          String          @default("SUBMITTED")
+  createdAt       DateTime        @default(now())
+
+  @@unique([employeeId, cycleId])
+}
+
+// ==========================================
+// 14. TRAINING & LEARNING
+// ==========================================
+
+model TrainingCourse {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  title           String
+  trainerName     String?
+  durationHours   Int             @default(8)
+  category        String
+  createdAt       DateTime        @default(now())
+
+  nominations     TrainingNomination[]
+
+  @@unique([companyId, code])
+}
+
+model TrainingNomination {
+  id              String          @id @default(uuid())
+  courseId        String
+  course          TrainingCourse  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  status          String          @default("NOMINATED")
+  feedback        String?
+  createdAt       DateTime        @default(now())
+
+  @@unique([courseId, employeeId])
+}
+
+// ==========================================
+// 15. LOANS & ADVANCES
 // ==========================================
 
 model LoanType {
-  id            String       @id @default(cuid())
-  institutionId String
-  institution   Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String       // COMPUTER_ADVANCE, FESTIVAL_ADVANCE, HOUSE_BUILDING
-  name          String
-  maxAmount     Decimal      @db.Decimal(18, 2)
-  interestRate  Decimal      @db.Decimal(5, 2)
-  maxInstallments Int
-  active        Boolean      @default(true)
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  maxAmount       Decimal         @db.Decimal(18, 2)
+  interestRatePct Decimal         @default(0) @db.Decimal(5, 2)
+  maxTenureMonths Int             @default(12)
 
-  loans         EmployeeLoan[]
+  loans           EmployeeLoan[]
 
-  @@unique([institutionId, code])
+  @@unique([companyId, code])
 }
 
 model EmployeeLoan {
-  id                    String        @id @default(cuid())
-  employeeId            String
-  employee              Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  loanTypeId            String
-  loanType              LoanType      @relation(fields: [loanTypeId], references: [id], onDelete: Restrict)
-  principalAmount       Decimal       @db.Decimal(18, 2)
-  interestAmount        Decimal       @default(0) @db.Decimal(18, 2)
-  totalAmount           Decimal       @db.Decimal(18, 2)
-  monthlyInstallment    Decimal       @db.Decimal(18, 2)
-  totalInstallments     Int
-  recoveredInstallments Int           @default(0)
-  recoveredAmount       Decimal       @default(0) @db.Decimal(18, 2)
-  outstandingAmount     Decimal       @db.Decimal(18, 2)
-  status                LoanStatus    @default(ACTIVE)
-  sanctionOrderNumber   String?
-  sanctionDate          DateTime      @default(now())
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
+  id              String          @id @default(uuid())
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  loanTypeId      String
+  loanType        LoanType        @relation(fields: [loanTypeId], references: [id])
+  principalAmount Decimal         @db.Decimal(18, 2)
+  monthlyEmi      Decimal         @db.Decimal(18, 2)
+  tenureMonths    Int
+  recoveredAmount Decimal         @default(0) @db.Decimal(18, 2)
+  outstandingAmount Decimal       @db.Decimal(18, 2)
+  status          String          @default("ACTIVE")
+  createdAt       DateTime        @default(now())
 
-  recoveries            LoanRecovery[]
-
-  @@index([employeeId, status])
+  repayments      LoanRepayment[]
 }
 
-model LoanRecovery {
-  id                String        @id @default(cuid())
-  employeeLoanId    String
-  employeeLoan      EmployeeLoan  @relation(fields: [employeeLoanId], references: [id], onDelete: Cascade)
-  payrollRecordId   String
-  payrollRecord     PayrollRecord @relation(fields: [payrollRecordId], references: [id], onDelete: Restrict)
+model LoanRepayment {
+  id              String          @id @default(uuid())
+  loanId          String
+  loan            EmployeeLoan    @relation(fields: [loanId], references: [id], onDelete: Cascade)
   installmentNumber Int
-  amountPaid        Decimal       @db.Decimal(18, 2)
-  remainingBalance  Decimal       @db.Decimal(18, 2)
-  recoveredAt       DateTime      @default(now())
-
-  @@index([employeeLoanId])
+  amountPaid      Decimal         @db.Decimal(18, 2)
+  paidDate        DateTime        @default(now())
 }
 
 // ==========================================
-// 9. LEAVE SALARY
+// 16. ASSET MANAGEMENT
 // ==========================================
 
-model LeaveType {
-  id             String       @id @default(cuid())
-  institutionId  String
-  institution    Institution  @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code           String       // CL, EL, HPL, EOL
-  name           String
-  isPaid         Boolean      @default(true)
-  deductionRatio Decimal      @default(0) @db.Decimal(3, 2) // 0.0 for CL/EL, 0.5 for HPL, 1.0 for EOL
-  active         Boolean      @default(true)
-  createdAt      DateTime     @default(now())
+model CompanyAsset {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assetTag        String          @unique
+  name            String
+  category        AssetCategory
+  serialNumber    String?
+  condition       AssetCondition  @default(NEW)
+  createdAt       DateTime        @default(now())
 
-  leaveRecords   EmployeeLeaveRecord[]
-
-  @@unique([institutionId, code])
+  allocations     AssetAllocation[]
 }
 
-model EmployeeLeaveRecord {
-  id          String    @id @default(cuid())
-  employeeId  String
-  employee    Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leaveTypeId String
-  leaveType   LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
-  fromDate    DateTime
-  toDate      DateTime
-  daysCount   Decimal   @db.Decimal(5, 2)
-  status      String    @default("APPROVED") // APPROVED, PENDING, REJECTED
-  remarks     String?
+model AssetAllocation {
+  id              String          @id @default(uuid())
+  assetId         String
+  asset           CompanyAsset    @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  allocatedAt     DateTime        @default(now())
+  returnedAt      DateTime?
+  status          String          @default("ALLOCATED")
+}
+
+// ==========================================
+// 17. HR HELP DESK
+// ==========================================
+
+model HelpDeskCategory {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  slaHours        Int             @default(24)
+
+  tickets         HelpDeskTicket[]
+
+  @@unique([companyId, name])
+}
+
+model HelpDeskTicket {
+  id              String          @id @default(uuid())
+  ticketNumber    String          @unique
+  employeeId      String
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        HelpDeskCategory @relation(fields: [categoryId], references: [id])
+  priority        TicketPriority  @default(MEDIUM)
+  subject         String
+  description     String
+  status          TicketStatus    @default(OPEN)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  comments        TicketComment[]
+}
+
+model TicketComment {
+  id              String          @id @default(uuid())
+  ticketId        String
+  ticket          HelpDeskTicket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  comment         String
+  isInternal      Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 18. OFFBOARDING & FULL-AND-FINAL (F&F)
+// ==========================================
+
+model Resignation {
+  id              String          @id @default(uuid())
+  employeeId      String          @unique
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  submittedAt     DateTime        @default(now())
+  requestedLwd    DateTime
+  agreedLwd       DateTime?
+  reason          String
+  status          RequestStatus   @default(PENDING)
+  approvedBy      String?
+  actionedAt      DateTime?
+
+  fnfSettlement   FnfSettlement?
+}
+
+model FnfSettlement {
+  id              String          @id @default(uuid())
+  employeeId      String          @unique
+  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  resignationId   String          @unique
+  resignation     Resignation     @relation(fields: [resignationId], references: [id])
+  lastWorkingDay  DateTime
+  noticeShortfallDays Int         @default(0)
+  noticeRecovery  Decimal         @default(0) @db.Decimal(18, 2)
+  leaveEncashment Decimal         @default(0) @db.Decimal(18, 2)
+  gratuityAmount  Decimal         @default(0) @db.Decimal(18, 2)
+  salaryDue       Decimal         @default(0) @db.Decimal(18, 2)
+  loanRecoveryDues Decimal        @default(0) @db.Decimal(18, 2)
+  netSettlementPay Decimal        @db.Decimal(18, 2)
+  status          String          @default("DRAFT")
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 19. VISITOR MANAGEMENT
+// ==========================================
+
+model VisitorPass {
+  id              String          @id @default(uuid())
+  companyId       String
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  passNumber      String          @unique
+  visitorName     String
+  visitorPhone    String
+  hostName        String
+  purpose         String
+  scheduledAt     DateTime
+  checkInTime     DateTime?
+  checkOutTime    DateTime?
+  status          String          @default("SCHEDULED")
+  createdAt       DateTime        @default(now())
+}
+
+// ==========================================
+// 20. CUSTOM FIELDS & COLUMN MANAGER
+// ==========================================
+
+model CustomFieldDefinition {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  module          String      @default("EMPLOYEE")
+  fieldKey        String
+  fieldLabel      String
+  fieldType       String      // TEXT, NUMBER, DATE, DROPDOWN, CHECKBOX, EMAIL
+  optionsJson     String?
+  isRequired      Boolean     @default(false)
+  defaultValue    String?
+  isVisible       Boolean     @default(true)
+  displayOrder    Int         @default(0)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  values          EmployeeCustomFieldValue[]
+
+  @@unique([companyId, module, fieldKey])
+}
+
+model EmployeeCustomFieldValue {
+  id                String                 @id @default(uuid())
+  employeeId        String
+  employee          Employee               @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  fieldDefinitionId String
+  fieldDefinition   CustomFieldDefinition  @relation(fields: [fieldDefinitionId], references: [id], onDelete: Cascade)
+  fieldValue        String?
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+
+  @@unique([employeeId, fieldDefinitionId])
+}
+
+// ==========================================
+// 21. IN-APP NOTIFICATIONS
+// ==========================================
+
+model InAppNotification {
+  id          String    @id @default(uuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  message     String
+  link        String?
+  type        String    @default("EXPENSE_CLAIM")
+  entityId    String?
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
   createdAt   DateTime  @default(now())
 
-  @@index([employeeId, fromDate, toDate])
-}
-
-// ==========================================
-// 10. ARREARS & PAY FIXATION
-// ==========================================
-
-model ArrearBatch {
-  id            String        @id @default(cuid())
-  institutionId String
-  institution   Institution   @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  name          String
-  reason        String
-  status        PayrollStatus @default(GENERATED)
-  totalAmount   Decimal       @default(0) @db.Decimal(18, 2)
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
-
-  records       ArrearRecord[]
-
-  @@index([institutionId, status])
-}
-
-model ArrearRecord {
-  id            String      @id @default(cuid())
-  arrearBatchId String
-  arrearBatch   ArrearBatch @relation(fields: [arrearBatchId], references: [id], onDelete: Cascade)
-  employeeId    String
-  employee      Employee    @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  periodName    String      // "April 2025 - September 2025"
-  oldBasic      Decimal     @db.Decimal(18, 2)
-  newBasic      Decimal     @db.Decimal(18, 2)
-  basicDiff     Decimal     @db.Decimal(18, 2)
-  daDiff        Decimal     @default(0) @db.Decimal(18, 2)
-  hraDiff       Decimal     @default(0) @db.Decimal(18, 2)
-  taDiff        Decimal     @default(0) @db.Decimal(18, 2)
-  totalArrear   Decimal     @db.Decimal(18, 2)
-  remarks       String?
-  createdAt     DateTime    @default(now())
-
-  @@index([arrearBatchId, employeeId])
-}
-
-model PayFixation {
-  id                String    @id @default(cuid())
-  employeeId        String
-  employee          Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  orderNumber       String
-  orderDate         DateTime  @default(now())
-  effectiveDate     DateTime
-  previousPayLevel  String
-  previousBasic     Decimal   @db.Decimal(18, 2)
-  revisedPayLevel   String
-  revisedBasic      Decimal   @db.Decimal(18, 2)
-  reason            String    // PROMOTION, MACP, REVISION
-  status            String    @default("APPROVED")
-  createdAt         DateTime  @default(now())
-
-  @@index([employeeId])
-}
-
-// ==========================================
-// 11. INCREMENTS
-// ==========================================
-
-model IncrementBatch {
-  id              String        @id @default(cuid())
-  institutionId   String
-  institution     Institution   @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  financialYearId String
-  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  name            String
-  effectiveDate   DateTime
-  status          PayrollStatus @default(GENERATED)
-  totalEmployees  Int           @default(0)
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-
-  increments      EmployeeIncrement[]
-
-  @@index([institutionId, effectiveDate])
-}
-
-model EmployeeIncrement {
-  id                String         @id @default(cuid())
-  incrementBatchId  String
-  incrementBatch    IncrementBatch @relation(fields: [incrementBatchId], references: [id], onDelete: Cascade)
-  employeeId        String
-  employee          Employee       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  currentCellId     String?
-  currentCell       PayMatrixCell? @relation("CurrentCell", fields: [currentCellId], references: [id], onDelete: SetNull)
-  currentBasic      Decimal        @db.Decimal(18, 2)
-  nextCellId        String?
-  nextCell          PayMatrixCell? @relation("NextCell", fields: [nextCellId], references: [id], onDelete: SetNull)
-  nextBasic         Decimal        @db.Decimal(18, 2)
-  effectiveDate     DateTime
-  nextIncrementDate DateTime?
-  status            String         @default("PROPOSED") // PROPOSED, APPROVED, REJECTED
-  createdAt         DateTime       @default(now())
-
-  @@unique([incrementBatchId, employeeId])
-}
-
-// ==========================================
-// 12. OTHER TAXABLE PAYMENTS
-// ==========================================
-
-model OtherPaymentType {
-  id            String         @id @default(cuid())
-  institutionId String
-  institution   Institution    @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  code          String         // CEA, HONORARIUM, INCENTIVE, BONUS
-  name          String
-  isTaxable     Boolean        @default(true)
-  active        Boolean        @default(true)
-  createdAt     DateTime       @default(now())
-
-  payments      OtherPayment[]
-
-  @@unique([institutionId, code])
-}
-
-model OtherPayment {
-  id              String           @id @default(cuid())
-  institutionId   String
-  institution     Institution      @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  employeeId      String
-  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  paymentTypeId   String
-  paymentType     OtherPaymentType @relation(fields: [paymentTypeId], references: [id], onDelete: Restrict)
-  financialYearId String
-  financialYear   FinancialYear    @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  periodId        String?
-  period          PayrollPeriod?   @relation(fields: [periodId], references: [id], onDelete: SetNull)
-  amount          Decimal          @db.Decimal(18, 2)
-  status          PayrollStatus    @default(GENERATED)
-  remarks         String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-
-  @@index([employeeId, financialYearId])
-}
-
-// ==========================================
-// 13. GPF (GENERAL PROVIDENT FUND)
-// ==========================================
-
-model GpfInterestRate {
-  id              String        @id @default(cuid())
-  institutionId   String
-  institution     Institution   @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  financialYearId String
-  financialYear   FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  ratePercentage  Decimal       @db.Decimal(5, 2) // e.g. 7.10%
-  effectiveFrom   DateTime
-  effectiveTo     DateTime
-  isApproved      Boolean       @default(true)
-  createdAt       DateTime      @default(now())
-
-  @@unique([institutionId, financialYearId, effectiveFrom])
-}
-
-model GpfAccount {
-  id                 String           @id @default(cuid())
-  employeeId         String           @unique
-  employee           Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
-  accountNumber      String           @unique
-  openingBalance     Decimal          @default(0) @db.Decimal(18, 2)
-  openingBalanceDate DateTime
-  currentBalance     Decimal          @default(0) @db.Decimal(18, 2)
-  status             GpfAccountStatus @default(ACTIVE)
-  closedAt           DateTime?
-  closureRemarks     String?
-  createdAt          DateTime         @default(now())
-  updatedAt          DateTime         @updatedAt
-
-  transactions       GpfTransaction[]
-  statements         GpfStatement[]
-}
-
-model GpfTransaction {
-  id              String             @id @default(cuid())
-  gpfAccountId    String
-  gpfAccount      GpfAccount         @relation(fields: [gpfAccountId], references: [id], onDelete: Cascade)
-  periodId        String?
-  period          PayrollPeriod?     @relation(fields: [periodId], references: [id], onDelete: SetNull)
-  transactionType GpfTransactionType
-  amount          Decimal            @db.Decimal(18, 2)
-  balanceAfter    Decimal            @db.Decimal(18, 2)
-  referenceNumber String?
-  remarks         String?
-  transactionDate DateTime           @default(now())
-
-  @@index([gpfAccountId, transactionDate])
-}
-
-model GpfStatement {
-  id                 String        @id @default(cuid())
-  gpfAccountId       String
-  gpfAccount         GpfAccount    @relation(fields: [gpfAccountId], references: [id], onDelete: Cascade)
-  financialYearId    String
-  financialYear      FinancialYear @relation(fields: [financialYearId], references: [id], onDelete: Restrict)
-  openingBalance     Decimal       @db.Decimal(18, 2)
-  totalSubscriptions Decimal       @default(0) @db.Decimal(18, 2)
-  totalRefunds       Decimal       @default(0) @db.Decimal(18, 2)
-  totalInterest      Decimal       @default(0) @db.Decimal(18, 2)
-  totalWithdrawals   Decimal       @default(0) @db.Decimal(18, 2)
-  closingBalance     Decimal       @db.Decimal(18, 2)
-  status             PayrollStatus @default(GENERATED)
-  verifiedBy         String?
-  approvedBy         String?
-  approvedAt         DateTime?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
-
-  @@unique([gpfAccountId, financialYearId])
-}
-
-// ==========================================
-// 14. BULK IMPORTS & PAYMENTS
-// ==========================================
-
-model ImportJob {
-  id            String          @id @default(cuid())
-  institutionId String
-  institution   Institution     @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  uploadedBy    String
-  importType    ImportType
-  fileName      String
-  totalRows     Int             @default(0)
-  validRows     Int             @default(0)
-  errorRows     Int             @default(0)
-  status        ImportJobStatus @default(PENDING)
-  createdAt     DateTime        @default(now())
-  updatedAt     DateTime        @updatedAt
-
-  rowErrors     ImportRowError[]
-
-  @@index([institutionId, importType])
-}
-
-model ImportRowError {
-  id          String    @id @default(cuid())
-  importJobId String
-  importJob   ImportJob @relation(fields: [importJobId], references: [id], onDelete: Cascade)
-  rowNumber   Int
-  fieldName   String?
-  errorReason String
-  rawData     Json?
-
-  @@index([importJobId])
-}
-
-model PaymentBatch {
-  id             String             @id @default(cuid())
-  institutionId  String
-  institution    Institution        @relation(fields: [institutionId], references: [id], onDelete: Restrict)
-  payrollRunId   String
-  payrollRun     PayrollRun         @relation(fields: [payrollRunId], references: [id], onDelete: Restrict)
-  batchNumber    String             @unique
-  bankName       String
-  paymentMethod  PaymentMethod      @default(NEFT)
-  totalEmployees Int
-  totalAmount    Decimal            @db.Decimal(18, 2)
-  status         PaymentBatchStatus @default(DRAFT)
-  adviceFileName String?
-  exportedAt     DateTime?
-  reconciledAt   DateTime?
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-
-  @@index([institutionId, status])
+  @@index([userId, isRead])
+  @@index([companyId, type])
 }

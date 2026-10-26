@@ -3,15 +3,17 @@ import jwt from 'jsonwebtoken';
 import { ENV } from '../config/env.js';
 import { prisma } from '../config/db.js';
 import { AppError } from './errorHandler.js';
+import { getEffectivePermissionsForUser } from '../modules/rbac/rbac.service.js';
 
 export interface AuthenticatedUser {
   userId: string;
-  institutionId: string;
+  companyId: string;
   username: string;
+  email: string;
   fullName: string;
   employeeId?: string | null;
   roles: string[];
-  scopedOuIds: string[];
+  permissions: string[];
 }
 
 declare global {
@@ -32,7 +34,8 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, ENV.JWT_SECRET) as {
       userId: string;
-      institutionId: string;
+      companyId: string;
+      sessionId?: string;
     };
 
     const user = await prisma.user.findUnique({
@@ -40,8 +43,7 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       include: {
         userRoles: {
           include: {
-            role: true,
-            ou: true
+            role: true
           }
         }
       }
@@ -51,19 +53,24 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
       throw new AppError('User not found or account deactivated', 401, 'UNAUTHORIZED');
     }
 
-    const roles = user.userRoles.map(ur => ur.role.code);
-    const scopedOuIds = user.userRoles
-      .map(ur => ur.ouId)
-      .filter((ouId): ouId is string => Boolean(ouId));
+    if (user.activeSessionId || decoded.sessionId) {
+      if (!decoded.sessionId || !user.activeSessionId || user.activeSessionId !== decoded.sessionId) {
+        throw new AppError('Session has been revoked or superseded by another login', 401, 'SESSION_REVOKED');
+      }
+    }
+
+    const roles = user.userRoles.map(ur => ur.role.name);
+    const permissions = await getEffectivePermissionsForUser(user.id);
 
     req.user = {
       userId: user.id,
-      institutionId: user.institutionId,
+      companyId: user.companyId,
       username: user.username,
+      email: user.email,
       fullName: user.fullName,
       employeeId: user.employeeId,
       roles,
-      scopedOuIds
+      permissions
     };
 
     next();
@@ -84,8 +91,32 @@ export function requireRole(allowedRoles: string[]) {
     }
 
     const hasRole = req.user.roles.some(role => allowedRoles.includes(role));
-    if (!hasRole && !req.user.roles.includes('payroll_admin') && !req.user.roles.includes('platform_admin')) {
+    if (!hasRole && !req.user.roles.includes('company_admin') && !req.user.roles.includes('platform_admin')) {
       next(new AppError(`Access denied. Requires one of roles: ${allowedRoles.join(', ')}`, 403, 'FORBIDDEN'));
+      return;
+    }
+
+    next();
+  };
+}
+
+export function requirePermission(required: string | string[]) {
+  const reqList = Array.isArray(required) ? required : [required];
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      next(new AppError('Authentication required', 401, 'UNAUTHORIZED'));
+      return;
+    }
+
+    if (req.user.roles.includes('company_admin') || req.user.roles.includes('platform_admin')) {
+      next();
+      return;
+    }
+
+    const userPerms = new Set(req.user.permissions || []);
+    const hasPerm = reqList.some(p => userPerms.has(p));
+    if (!hasPerm) {
+      next(new AppError(`Access denied. Missing required permission: ${reqList.join(' or ')}`, 403, 'FORBIDDEN'));
       return;
     }
 
@@ -98,18 +129,18 @@ export async function recordAudit(
   action: string,
   entityType: string,
   entityId?: string | null,
-  details?: any
+  metadata?: any
 ): Promise<void> {
   try {
     if (!req.user) return;
     await prisma.auditLog.create({
       data: {
-        institutionId: req.user.institutionId,
+        companyId: req.user.companyId,
         userId: req.user.userId,
         action,
         entityType,
         entityId: entityId ?? null,
-        details: details ?? {},
+        metadata: metadata ?? {},
         ipAddress: req.ip ?? req.socket.remoteAddress
       }
     });

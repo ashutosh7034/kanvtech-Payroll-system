@@ -1,26 +1,64 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { FileText, Building, CreditCard, Landmark, Printer, X } from 'lucide-react';
+import { PageHeader } from '../components/common/PageHeader';
+import { FormModal } from '../components/common/FormModal';
+import {
+  FileText,
+  Building,
+  CreditCard,
+  Landmark,
+  Printer,
+  Receipt,
+  Plus,
+  Clock,
+  CheckCircle2,
+  AlertCircle,
+  Eye,
+  ExternalLink,
+  User,
+  ShieldCheck
+} from 'lucide-react';
 
-export const SelfServiceView: React.FC = () => {
+interface Props {
+  onNavigate?: (page: string) => void;
+}
+
+export const SelfServiceView: React.FC<Props> = ({ onNavigate }) => {
   const { user } = useAuth();
   const [profile, setProfile] = useState<any | null>(null);
   const [payslips, setPayslips] = useState<any[]>([]);
   const [selectedPayslip, setSelectedPayslip] = useState<any | null>(null);
+  const [claims, setClaims] = useState<any[]>([]);
+  const [claimMetrics, setClaimMetrics] = useState<any>({
+    totalCount: 0,
+    pendingCount: 0,
+    approvedCount: 0,
+    correctionRequestedCount: 0,
+    paidCount: 0,
+    expenseCount: 0,
+    reimbursementCount: 0,
+    totalPendingAmount: 0,
+    totalApprovedAmount: 0,
+    totalPaidAmount: 0
+  });
+  const [claimsTab, setClaimsTab] = useState<'all' | 'expense' | 'reimbursement'>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [pRes, psRes]: any = await Promise.all([
-          api.get('/self-service/profile'),
-          api.get('/self-service/payslips')
+        const [pRes, psRes, cRes]: any = await Promise.all([
+          api.get('/self-service/profile').catch(() => ({ profile: null })),
+          api.get('/self-service/payslips').catch(() => ({ payslips: [] })),
+          api.get('/expenses/claims?pageSize=10').catch(() => ({ claims: [], metrics: null }))
         ]);
         setProfile(pRes.profile);
-        setPayslips(psRes.payslips);
+        setPayslips(psRes.payslips || []);
+        setClaims(cRes.claims || []);
+        if (cRes.metrics) setClaimMetrics(cRes.metrics);
       } catch (err) {
-        console.error(err);
+        console.error('Failed to load self-service profile:', err);
       } finally {
         setLoading(false);
       }
@@ -33,7 +71,7 @@ export const SelfServiceView: React.FC = () => {
       const res: any = await api.get(`/self-service/payslips/${recordId}`);
       setSelectedPayslip(res.payslip);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load full payslip:', err);
     }
   };
 
@@ -44,66 +82,202 @@ export const SelfServiceView: React.FC = () => {
   const assignment = profile?.salaryAssignments?.[0];
   const bank = profile?.bankAccounts?.[0];
 
+  const filteredClaims = claims.filter(c => {
+    if (claimsTab === 'expense') return (c.claimType || 'EXPENSE') === 'EXPENSE';
+    if (claimsTab === 'reimbursement') return c.claimType === 'REIMBURSEMENT';
+    return true;
+  });
+
   return (
-    <div>
-      {/* Top Banner */}
-      <div style={{ background: 'linear-gradient(135deg, rgba(37,99,235,0.2), rgba(16,185,129,0.1))', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '24px', marginBottom: '24px' }}>
-        <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          Employee Self-Service Portal
-        </span>
-        <h2 style={{ fontSize: '1.4rem', fontFamily: 'var(--font-heading)', fontWeight: 700, marginTop: '2px' }}>
-          {profile?.firstName} {profile?.middleName ? `${profile?.middleName} ` : ''}{profile?.lastName}
-        </h2>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-          {profile?.employeeCode} • {profile?.designation?.name} • {profile?.department?.name}
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {/* Standard PageHeader */}
+      <PageHeader
+        title={`Employee Portal: ${user?.fullName || 'Staff Member'}`}
+        subtitle={`Emp Code: ${profile?.employeeCode || 'N/A'} • ${profile?.designation?.name || 'Staff'} • ${profile?.department?.name || 'Department'}`}
+        breadcrumbs={[
+          { label: 'Employee Portal' },
+          { label: 'My Self-Service (ESS)' }
+        ]}
+        badge={<span className="badge badge-brand" style={{ fontSize: '0.7rem' }}>ESS Verified</span>}
+        actions={
+          <button className="btn btn-outline btn-sm" onClick={() => onNavigate?.('expenses')}>
+            <Receipt size={14} /> My Claims & Expenses
+          </button>
+        }
+      />
+
+      {/* Profile & Statutory Overview Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+        {/* Personal & Employment Info */}
+        <div className="panel" style={{ padding: '16px', margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+            <User size={16} color="var(--primary)" />
+            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Employment Profile</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8125rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Work Email:</span>
+              <strong>{profile?.workEmail || user?.email || '—'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Date of Joining:</span>
+              <strong>{profile?.dateOfJoining ? new Date(profile.dateOfJoining).toLocaleDateString('en-IN') : '—'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Branch Office:</span>
+              <strong>{profile?.branch?.name || 'Headquarters'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Reporting Manager:</span>
+              <strong>{profile?.reportingManager ? `${profile.reportingManager.firstName} ${profile.reportingManager.lastName}` : 'Direct Lead'}</strong>
+            </div>
+          </div>
+        </div>
+
+        {/* Compensation & Structure */}
+        <div className="panel" style={{ padding: '16px', margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+            <Building size={16} color="var(--primary)" />
+            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Active Compensation</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8125rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Salary Structure:</span>
+              <strong>{assignment?.structure?.name || 'Standard Corporate CTC'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Monthly Base:</span>
+              <strong className="money">₹{Number(assignment?.baseSalary || 0).toLocaleString('en-IN')}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Effective From:</span>
+              <strong>{assignment?.effectiveFrom ? new Date(assignment.effectiveFrom).toLocaleDateString('en-IN') : 'Active'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+              <span className="badge badge-approved">Active Enrollment</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Bank & Statutory Identifiers */}
+        <div className="panel" style={{ padding: '16px', margin: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+            <Landmark size={16} color="var(--primary)" />
+            <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 700 }}>Disbursement & Statutory</h4>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8125rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Bank Name:</span>
+              <strong>{bank?.bankName || 'State Bank of India'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Account Number:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>{bank?.accountNumber ? `••••${bank.accountNumber.slice(-4)}` : '••••3892'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>IFSC Code:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>{bank?.ifscCode || 'SBIN0001245'}</strong>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <span style={{ color: 'var(--text-muted)' }}>PAN Identifier:</span>
+              <strong style={{ fontFamily: 'var(--font-mono)' }}>{profile?.pan || 'ABCDE1234F'}</strong>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Grid Information */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '24px' }}>
-        <div className="panel" style={{ margin: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--primary)', marginBottom: '12px' }}>
-            <Building size={16} /> <strong style={{ fontSize: '0.9rem' }}>Department & Placement</strong>
+      {/* Claims & Expense Overview */}
+      <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Receipt size={16} color="var(--primary)" /> Recent Corporate Reimbursement Claims ({claims.length})
           </div>
-          <div style={{ fontSize: '0.82rem', lineHeight: '1.8' }}>
-            <div>Campus: <strong>{profile?.ou?.name}</strong></div>
-            <div>Department: <strong>{profile?.department?.name}</strong></div>
-            <div>Pay Level: <strong>{assignment?.payLevel?.name || 'Level 13'}</strong></div>
-            <div>Basic Salary: <strong style={{ color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>₹{Number(assignment?.basicPay || 0).toLocaleString('en-IN')}</strong></div>
+          <div style={{ display: 'flex', gap: '6px' }}>
+            <button
+              className={`btn btn-xs ${claimsTab === 'all' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setClaimsTab('all')}
+            >
+              All
+            </button>
+            <button
+              className={`btn btn-xs ${claimsTab === 'expense' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setClaimsTab('expense')}
+            >
+              Expenses
+            </button>
+            <button
+              className={`btn btn-xs ${claimsTab === 'reimbursement' ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setClaimsTab('reimbursement')}
+            >
+              Reimbursements
+            </button>
           </div>
         </div>
 
-        <div className="panel" style={{ margin: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--success)', marginBottom: '12px' }}>
-            <CreditCard size={16} /> <strong style={{ fontSize: '0.9rem' }}>Bank & PAN Record</strong>
-          </div>
-          <div style={{ fontSize: '0.82rem', lineHeight: '1.8' }}>
-            <div>Bank: <strong>{bank?.bankName || 'State Bank of India'}</strong></div>
-            <div>A/C: <strong style={{ fontFamily: 'var(--font-mono)' }}>{bank?.maskedAccount || 'XXXXXX1234'}</strong></div>
-            <div>IFSC: <strong style={{ fontFamily: 'var(--font-mono)' }}>{bank?.ifscCode || 'SBIN0001234'}</strong></div>
-            <div>PAN: <strong style={{ fontFamily: 'var(--font-mono)' }}>{profile?.maskedPan || 'ABCXXXXX4F'}</strong></div>
-          </div>
-        </div>
-
-        <div className="panel" style={{ margin: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--warning)', marginBottom: '12px' }}>
-            <Landmark size={16} /> <strong style={{ fontSize: '0.9rem' }}>Provident Fund & Loans</strong>
-          </div>
-          <div style={{ fontSize: '0.82rem', lineHeight: '1.8' }}>
-            <div>GPF Account: <strong style={{ fontFamily: 'var(--font-mono)' }}>{profile?.gpfAccount?.accountNumber || 'N/A'}</strong></div>
-            <div>GPF Balance: <strong style={{ color: 'var(--success)', fontFamily: 'var(--font-mono)' }}>₹{Number(profile?.gpfAccount?.currentBalance || 0).toLocaleString('en-IN')}</strong></div>
-            <div>Active Loans: <strong>{profile?.loans?.length || 0} active advances</strong></div>
-          </div>
+        <div className="table-container" style={{ border: 'none' }}>
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>Claim # / Ref</th>
+                <th>Type</th>
+                <th>Claim Date</th>
+                <th className="money">Claimed Amount</th>
+                <th>Status</th>
+                <th style={{ textAlign: 'center' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredClaims.length === 0 ? (
+                <tr>
+                  <td colSpan={6} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>
+                    No reimbursement claims filed yet.
+                  </td>
+                </tr>
+              ) : (
+                filteredClaims.map(c => (
+                  <tr key={c.id}>
+                    <td>
+                      <strong>{c.claimNumber || c.title}</strong>
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.title}</div>
+                    </td>
+                    <td>
+                      <span className="badge badge-brand" style={{ fontSize: '0.7rem' }}>
+                        {c.claimType || 'EXPENSE'}
+                      </span>
+                    </td>
+                    <td>{new Date(c.claimDate).toLocaleDateString('en-IN')}</td>
+                    <td className="money" style={{ fontWeight: 600 }}>₹{Number(c.totalAmount).toLocaleString('en-IN')}</td>
+                    <td>
+                      <span className={`badge ${c.status === 'APPROVED' ? 'badge-approved' : c.status === 'PAID' ? 'badge-finalized' : c.status === 'REJECTED' ? 'badge-danger' : 'badge-warning'}`}>
+                        {c.status}
+                      </span>
+                    </td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => onNavigate?.('expenses')}
+                      >
+                        <Eye size={12} /> View in Studio
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
       {/* Monthly Payslips Catalog */}
-      <div className="panel">
-        <div className="panel-header">
-          <h3 className="panel-title">My Official Monthly Payslips</h3>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Approved Disbursement Vouchers</span>
+      <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3 className="panel-title" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <FileText size={16} color="var(--primary)" /> My Official Monthly Payslips
+          </h3>
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Approved Disbursement Vouchers</span>
         </div>
-        <div className="table-container">
+        <div className="table-container" style={{ border: 'none' }}>
           <table className="data-table">
             <thead>
               <tr>
@@ -114,25 +288,29 @@ export const SelfServiceView: React.FC = () => {
                 <th className="money">Gross Earnings</th>
                 <th className="money">Total Deductions</th>
                 <th className="money">Net Credit</th>
-                <th>Action</th>
+                <th style={{ textAlign: 'center' }}>Action</th>
               </tr>
             </thead>
             <tbody>
               {payslips.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No finalized payslips available yet.</td></tr>
+                <tr>
+                  <td colSpan={8} style={{ textAlign: 'center', padding: '32px', color: 'var(--text-muted)' }}>
+                    No finalized payslips available yet.
+                  </td>
+                </tr>
               ) : (
                 payslips.map(ps => (
                   <tr key={ps.recordId}>
                     <td><strong>{ps.periodName}</strong></td>
                     <td>{ps.financialYear}</td>
-                    <td>{ps.payableDays} days</td>
+                    <td>{ps.payableDays} Days</td>
                     <td className="money">₹{ps.basicPay.toLocaleString('en-IN')}</td>
                     <td className="money">₹{ps.grossAmount.toLocaleString('en-IN')}</td>
                     <td className="money" style={{ color: 'var(--danger)' }}>₹{ps.deductionAmount.toLocaleString('en-IN')}</td>
                     <td className="money" style={{ color: 'var(--success)', fontWeight: 700, fontSize: '0.95rem' }}>
                       ₹{ps.netAmount.toLocaleString('en-IN')}
                     </td>
-                    <td>
+                    <td style={{ textAlign: 'center' }}>
                       <button className="btn btn-primary btn-sm" onClick={() => openFullPayslip(ps.recordId)}>
                         <FileText size={12} /> View Slip
                       </button>
@@ -145,75 +323,79 @@ export const SelfServiceView: React.FC = () => {
         </div>
       </div>
 
-      {/* Payslip Modal */}
+      {/* Payslip Modal (Pattern B - Large) */}
       {selectedPayslip && (
-        <div className="modal-overlay" onClick={() => setSelectedPayslip(null)}>
-          <div className="modal-content modal-lg" onClick={e => e.stopPropagation()} style={{ background: '#f1f5f9' }}>
-            <div className="modal-header" style={{ background: '#ffffff', color: '#0f172a' }}>
-              <h3 style={{ color: '#0f172a' }}>Salary Slip</h3>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><Printer size={12} /> Print</button>
-                <button className="btn btn-outline btn-sm" onClick={() => setSelectedPayslip(null)}><X size={16} /></button>
+        <FormModal
+          isOpen={Boolean(selectedPayslip)}
+          onClose={() => setSelectedPayslip(null)}
+          title={`Salary Slip: ${selectedPayslip.period || 'Monthly Period'}`}
+          subtitle={`${selectedPayslip.institution?.name || 'PayFlow HRMS'} • Employee Code: ${selectedPayslip.employee?.code || ''}`}
+          icon={<FileText size={18} />}
+          width="lg"
+          footer={
+            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', width: '100%' }}>
+              <button className="btn btn-outline" onClick={() => window.print()}>
+                <Printer size={14} /> Print Payslip
+              </button>
+              <button className="btn btn-secondary" onClick={() => setSelectedPayslip(null)}>
+                Close
+              </button>
+            </div>
+          }
+        >
+          <div className="payslip-sheet">
+            <div className="payslip-header">
+              <h2>{selectedPayslip.institution?.name}</h2>
+              <p>{selectedPayslip.institution?.brandName} • Payslip for {selectedPayslip.period}</p>
+            </div>
+
+            <div className="payslip-emp-grid">
+              <div className="payslip-emp-row"><span>Employee Code:</span> <strong>{selectedPayslip.employee?.code}</strong></div>
+              <div className="payslip-emp-row"><span>Designation:</span> <strong>{selectedPayslip.employee?.designation}</strong></div>
+              <div className="payslip-emp-row"><span>Name:</span> <strong>{selectedPayslip.employee?.name}</strong></div>
+              <div className="payslip-emp-row"><span>Department:</span> <strong>{selectedPayslip.employee?.department}</strong></div>
+              <div className="payslip-emp-row"><span>Bank A/C:</span> <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedPayslip.employee?.accountNumber} ({selectedPayslip.employee?.bankName})</strong></div>
+              <div className="payslip-emp-row"><span>PAN:</span> <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedPayslip.employee?.pan}</strong></div>
+            </div>
+
+            <div className="payslip-salary-split">
+              <div>
+                <h4 style={{ color: '#1e3a8a', marginBottom: '8px' }}>Earnings & Allowances</h4>
+                <table className="payslip-table">
+                  <thead><tr><th>Component</th><th style={{ textAlign: 'right' }}>Amount (₹)</th></tr></thead>
+                  <tbody>
+                    {selectedPayslip.earnings?.map((e: any, idx: number) => (
+                      <tr key={idx}><td>{e.name}</td><td style={{ textAlign: 'right' }}>₹{e.amount.toLocaleString('en-IN')}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div>
+                <h4 style={{ color: '#991b1b', marginBottom: '8px' }}>Deductions & Recoveries</h4>
+                <table className="payslip-table">
+                  <thead><tr><th>Component</th><th style={{ textAlign: 'right' }}>Amount (₹)</th></tr></thead>
+                  <tbody>
+                    {selectedPayslip.deductions?.map((d: any, idx: number) => (
+                      <tr key={idx}><td>{d.name}</td><td style={{ textAlign: 'right' }}>₹{d.amount.toLocaleString('en-IN')}</td></tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <div className="payslip-sheet">
-                <div className="payslip-header">
-                  <h2>{selectedPayslip.institution?.name}</h2>
-                  <p>{selectedPayslip.institution?.brandName} • Payslip for {selectedPayslip.period}</p>
-                </div>
 
-                <div className="payslip-emp-grid">
-                  <div className="payslip-emp-row"><span>Employee Code:</span> <strong>{selectedPayslip.employee?.code}</strong></div>
-                  <div className="payslip-emp-row"><span>Designation:</span> <strong>{selectedPayslip.employee?.designation}</strong></div>
-                  <div className="payslip-emp-row"><span>Name:</span> <strong>{selectedPayslip.employee?.name}</strong></div>
-                  <div className="payslip-emp-row"><span>Department:</span> <strong>{selectedPayslip.employee?.department}</strong></div>
-                  <div className="payslip-emp-row"><span>Bank A/C:</span> <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedPayslip.employee?.accountNumber} ({selectedPayslip.employee?.bankName})</strong></div>
-                  <div className="payslip-emp-row"><span>PAN:</span> <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedPayslip.employee?.pan}</strong></div>
-                </div>
-
-                <div className="payslip-salary-split">
-                  <div>
-                    <h4 style={{ color: '#1e3a8a', marginBottom: '8px' }}>Earnings & Allowances</h4>
-                    <table className="payslip-table">
-                      <thead><tr><th>Component</th><th style={{ textAlign: 'right' }}>Amount (₹)</th></tr></thead>
-                      <tbody>
-                        {selectedPayslip.earnings?.map((e: any, i: number) => (
-                          <tr key={i}><td>{e.name}</td><td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(e.amount).toLocaleString('en-IN')}</td></tr>
-                        ))}
-                        <tr style={{ fontWeight: 700, background: '#f8fafc' }}>
-                          <td>Gross Earnings</td>
-                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>₹{Number(selectedPayslip.grossAmount).toLocaleString('en-IN')}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div>
-                    <h4 style={{ color: '#991b1b', marginBottom: '8px' }}>Deductions & Recoveries</h4>
-                    <table className="payslip-table">
-                      <thead><tr><th>Component</th><th style={{ textAlign: 'right' }}>Amount (₹)</th></tr></thead>
-                      <tbody>
-                        {selectedPayslip.deductions?.map((d: any, i: number) => (
-                          <tr key={i}><td>{d.name}</td><td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)' }}>{Number(d.amount).toLocaleString('en-IN')}</td></tr>
-                        ))}
-                        <tr style={{ fontWeight: 700, background: '#f8fafc' }}>
-                          <td>Total Deductions</td>
-                          <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', color: '#991b1b' }}>₹{Number(selectedPayslip.deductionAmount).toLocaleString('en-IN')}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                <div className="payslip-net-box">
-                  <h4>Net Payable Salary</h4>
-                  <div className="net-val">₹{Number(selectedPayslip.netAmount).toLocaleString('en-IN')}</div>
-                </div>
+            <div className="payslip-summary-box">
+              <div>
+                <div>Gross Pay: <strong>₹{selectedPayslip.summary?.gross?.toLocaleString('en-IN')}</strong></div>
+                <div>Total Deductions: <strong>₹{selectedPayslip.summary?.deductions?.toLocaleString('en-IN')}</strong></div>
+              </div>
+              <div style={{ textAlign: 'right' }}>
+                <span style={{ fontSize: '0.85rem' }}>Net Take-Home Pay</span>
+                <h1 style={{ color: '#15803d', margin: 0 }}>₹{selectedPayslip.summary?.net?.toLocaleString('en-IN')}</h1>
               </div>
             </div>
           </div>
-        </div>
+        </FormModal>
       )}
     </div>
   );
