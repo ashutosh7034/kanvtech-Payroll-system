@@ -402,8 +402,10 @@ export const ExpensesView: React.FC = () => {
   // Open Claim Correction Dialog
   const handleOpenCorrection = (claim: ExpenseClaim) => {
     setCorrectingClaim(claim);
-    setCorrectingTitle(claim.title);
-    setCorrectingDate(claim.claimDate ? new Date(claim.claimDate).toISOString().split('T')[0] : '');
+    const safeClaimDate = claim.claimDate && !isNaN(new Date(claim.claimDate).getTime())
+      ? new Date(claim.claimDate).toISOString().split('T')[0]
+      : '';
+    setCorrectingDate(safeClaimDate);
     setCorrectingNotes(claim.correctionNotes || '');
     setCorrectingItems(
       (claim.items || []).map(i => ({
@@ -557,7 +559,7 @@ export const ExpensesView: React.FC = () => {
               claims.map(claim => (
                 <tr key={claim.id}>
                   <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, fontSize: '0.8rem' }}>
-                    {claim.claimNumber || `EXP-${claim.id.slice(0, 8).toUpperCase()}`}
+                    {claim.claimNumber || `EXP-${(claim.id || '').slice(0, 8).toUpperCase()}`}
                   </td>
                   <td>
                     <span
@@ -581,7 +583,9 @@ export const ExpensesView: React.FC = () => {
                     )}
                   </td>
                   <td style={{ fontSize: '0.8rem' }}>
-                    {new Date(claim.claimDate).toLocaleDateString()}
+                    {claim.claimDate && !isNaN(new Date(claim.claimDate).getTime())
+                      ? new Date(claim.claimDate).toLocaleDateString()
+                      : '—'}
                   </td>
                   <td style={{ fontSize: '0.8rem' }}>
                     {claim.items?.length || 1} line item{(claim.items?.length || 1) > 1 ? 's' : ''}

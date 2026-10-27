@@ -83,7 +83,10 @@ export const OffboardingView: React.FC = () => {
 
   const handleOpenCalcModal = (r: any) => {
     setSelectedResignation(r);
-    setAgreedLwd(new Date(r.requestedLwd).toISOString().split('T')[0]);
+    const validDate = r?.requestedLwd && !isNaN(new Date(r.requestedLwd).getTime())
+      ? new Date(r.requestedLwd).toISOString().split('T')[0]
+      : new Date().toISOString().split('T')[0];
+    setAgreedLwd(validDate);
     setNoticeShortfallDays(0);
     setCalcError(null);
     setShowCalcModal(true);

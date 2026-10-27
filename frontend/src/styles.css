@@ -70,11 +70,19 @@
   padding: 0;
 }
 
+html, body, #root {
+  height: 100%;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
   font-family: var(--font-sans);
   background: var(--bg-app);
   color: var(--text-main);
-  min-height: 100vh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   line-height: 1.45;
@@ -84,7 +92,8 @@ body {
 /* App Shell Structure */
 .app-layout {
   display: flex;
-  height: 100vh;
+  height: 100%;
+  width: 100%;
   overflow: hidden;
   background: var(--bg-app);
 }
@@ -245,6 +254,7 @@ body {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  height: 100%;
   overflow: hidden;
   background: var(--bg-app);
 }
@@ -296,6 +306,8 @@ body {
   padding: 18px 24px 36px;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Enterprise Panels / Cards */

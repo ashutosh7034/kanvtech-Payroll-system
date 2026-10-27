@@ -1331,7 +1331,11 @@ export const LoansView: React.FC = () => {
                       selectedLoan.repayments.map((rep: any) => (
                         <tr key={rep.id}>
                           <td style={{ textAlign: 'center', fontWeight: 600 }}>{rep.installmentNumber}</td>
-                          <td>{new Date(rep.paidDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })}</td>
+                          <td>
+                            {rep.paidDate && !isNaN(new Date(rep.paidDate).getTime())
+                              ? new Date(rep.paidDate).toLocaleDateString('en-IN', { year: 'numeric', month: 'short', day: 'numeric' })
+                              : '—'}
+                          </td>
                           <td className="money" style={{ color: 'var(--success)', fontWeight: 600 }}>
                             ₹{Number(rep.amountPaid).toLocaleString('en-IN')}
                           </td>

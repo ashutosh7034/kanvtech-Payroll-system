@@ -24,6 +24,7 @@ import { MyLeaveView } from './pages/MyLeaveView';
 import { MyPayslipsView } from './pages/MyPayslipsView';
 import { NotificationBell } from './components/NotificationBell';
 import { AccessDeniedView } from './components/common/AccessDeniedView';
+import { ErrorBoundary } from './components/common/ErrorBoundary';
 
 import {
   LayoutDashboard,
@@ -392,47 +393,49 @@ const AppContent: React.FC = () => {
           </div>
         </header>
 
-        {/* Dynamic Page Content with Route Guard */}
+        {/* Dynamic Page Content with Route Guard & Error Boundary */}
         <main className="content-body">
-          {(!canViewModule(currentPage === 'manage-employee' ? 'employees' : currentPage)) ? (
-            <AccessDeniedView
-              moduleName={breadcrumb.page}
-              requiredPermission={`module:${currentPage === 'manage-employee' ? 'employees' : currentPage}`}
-              onNavigate={(page) => setCurrentPage(page)}
-            />
-          ) : (
-            <>
-              {currentPage === 'dashboard' && <DashboardView onNavigate={setCurrentPage} />}
-              {currentPage === 'employees' && (
-                <EmployeesView 
-                  onEnroll={() => { setManageEmployeeId(null); setCurrentPage('manage-employee'); }} 
-                  onEdit={(id) => { setManageEmployeeId(id); setCurrentPage('manage-employee'); }} 
-                />
-              )}
-              {currentPage === 'manage-employee' && (
-                <ManageEmployeeView 
-                  employeeId={manageEmployeeId}
-                  onBack={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
-                  onSuccess={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
-                />
-              )}
-              {currentPage === 'recruitment' && <RecruitmentView />}
-              {currentPage === 'offboarding' && <OffboardingView />}
-              {currentPage === 'attendance' && <AttendanceView />}
-              {currentPage === 'leave' && <LeaveView />}
-              {currentPage === 'column-master' && <SalaryColumnMasterView onNavigateToStructures={() => setCurrentPage('compensation')} />}
-              {currentPage === 'compensation' && <CompensationView />}
-              {currentPage === 'payroll' && <PayrollProcessingView />}
-              {currentPage === 'loans' && <LoansView />}
-              {currentPage === 'expenses' && <ExpensesView />}
-              {currentPage === 'assets-helpdesk' && <AssetsHelpDeskView />}
-              {currentPage === 'reports' && <ReportsView />}
-              {currentPage === 'self' && <SelfServiceView onNavigate={setCurrentPage} />}
-              {currentPage === 'my-leave' && <MyLeaveView />}
-              {currentPage === 'my-payslips' && <MyPayslipsView />}
-              {currentPage === 'payroll-permissions' && <PayrollPermissionsView />}
-            </>
-          )}
+          <ErrorBoundary fallbackTitle="Module View Error">
+            {(!canViewModule(currentPage === 'manage-employee' ? 'employees' : currentPage)) ? (
+              <AccessDeniedView
+                moduleName={breadcrumb.page}
+                requiredPermission={`module:${currentPage === 'manage-employee' ? 'employees' : currentPage}`}
+                onNavigate={(page) => setCurrentPage(page)}
+              />
+            ) : (
+              <>
+                {currentPage === 'dashboard' && <DashboardView onNavigate={setCurrentPage} />}
+                {currentPage === 'employees' && (
+                  <EmployeesView 
+                    onEnroll={() => { setManageEmployeeId(null); setCurrentPage('manage-employee'); }} 
+                    onEdit={(id) => { setManageEmployeeId(id); setCurrentPage('manage-employee'); }} 
+                  />
+                )}
+                {currentPage === 'manage-employee' && (
+                  <ManageEmployeeView 
+                    employeeId={manageEmployeeId}
+                    onBack={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
+                    onSuccess={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
+                  />
+                )}
+                {currentPage === 'recruitment' && <RecruitmentView />}
+                {currentPage === 'offboarding' && <OffboardingView />}
+                {currentPage === 'attendance' && <AttendanceView />}
+                {currentPage === 'leave' && <LeaveView />}
+                {currentPage === 'column-master' && <SalaryColumnMasterView onNavigateToStructures={() => setCurrentPage('compensation')} />}
+                {currentPage === 'compensation' && <CompensationView />}
+                {currentPage === 'payroll' && <PayrollProcessingView />}
+                {currentPage === 'loans' && <LoansView />}
+                {currentPage === 'expenses' && <ExpensesView />}
+                {currentPage === 'assets-helpdesk' && <AssetsHelpDeskView />}
+                {currentPage === 'reports' && <ReportsView />}
+                {currentPage === 'self' && <SelfServiceView onNavigate={setCurrentPage} />}
+                {currentPage === 'my-leave' && <MyLeaveView />}
+                {currentPage === 'my-payslips' && <MyPayslipsView />}
+                {currentPage === 'payroll-permissions' && <PayrollPermissionsView />}
+              </>
+            )}
+          </ErrorBoundary>
         </main>
       </div>
     </div>
@@ -441,9 +444,11 @@ const AppContent: React.FC = () => {
 
 export const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ErrorBoundary fallbackTitle="Application Error">
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 };
 
