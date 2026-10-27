@@ -31,9 +31,22 @@ describe('Loan Interest Calculations, Principal Validation & Policy Engine Test 
 
     // 2. Fetch or create a test beneficiary employee
     let emp = await prisma.employee.findFirst({
-      where: { companyId: testCompanyId, status: 'ACTIVE' }
+      where: { companyId: testCompanyId }
     });
-    testEmployeeId = emp!.id;
+    if (!emp) {
+      emp = await prisma.employee.create({
+        data: {
+          companyId: testCompanyId,
+          employeeCode: `EMP_BENEF_${Date.now().toString().slice(-4)}`,
+          firstName: 'Beneficiary',
+          lastName: 'Staff',
+          workEmail: `beneficiary_${Date.now()}@example.com`,
+          dateOfJoining: new Date(),
+          status: 'CONFIRMED'
+        }
+      });
+    }
+    testEmployeeId = emp.id;
 
     // 3. Create a normal non-admin user/employee for RBAC testing
     let normEmp = await prisma.employee.findFirst({

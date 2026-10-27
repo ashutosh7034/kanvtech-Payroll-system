@@ -87,8 +87,8 @@ describe('Task 4: Department-Wise Payroll Processing & Manual Salary Adjustments
     testEmp2 = empList[1];
 
     // Assign testEmp1 to Engineering and testEmp2 to HR
-    await prisma.employee.update({ where: { id: testEmp1.id }, data: { departmentId: engDeptId } });
-    await prisma.employee.update({ where: { id: testEmp2.id }, data: { departmentId: hrDeptId } });
+    await prisma.employee.update({ where: { id: testEmp1.id }, data: { departmentId: engDeptId, status: 'CONFIRMED', exitDate: null } });
+    await prisma.employee.update({ where: { id: testEmp2.id }, data: { departmentId: hrDeptId, status: 'CONFIRMED', exitDate: null } });
 
     // Find or create testEmp3 without salary structure to test missing required salary structure detection
     let missingSalaryEmp = await prisma.employee.findFirst({

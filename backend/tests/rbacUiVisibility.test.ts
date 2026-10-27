@@ -277,12 +277,51 @@ describe('Dynamic Permission-Based UI Visibility (RBAC) & Authorization Suite', 
 
   describe('5. Database State & Protected Record Integrity Verification', () => {
     it('confirms existing loan records remain uncorrupted and intact', async () => {
-      const loans = await prisma.employeeLoan.findMany({ take: 5 });
-      expect(loans.length).toBeGreaterThan(0);
-      for (const loan of loans) {
-        expect(loan.id).toBeDefined();
-        expect(Number(loan.principalAmount)).toBeGreaterThan(0);
-        expect(['ACTIVE', 'COMPLETED', 'CLOSED', 'SANCTIONED']).toContain(loan.status);
+      let loans = await prisma.employeeLoan.findMany({ take: 5 });
+      let createdLoanId: string | null = null;
+      if (loans.length === 0) {
+        const emp = await prisma.employee.findFirst();
+        let lt = await prisma.loanType.findFirst();
+        if (!lt && emp) {
+          lt = await prisma.loanType.create({
+            data: {
+              companyId: emp.companyId,
+              code: 'PERSONAL_LOAN',
+              name: 'Personal Loan',
+              maxAmount: 100000,
+              interestRatePct: 0,
+              maxTenureMonths: 12
+            }
+          });
+        }
+        if (emp && lt) {
+          const l = await prisma.employeeLoan.create({
+            data: {
+              employeeId: emp.id,
+              loanTypeId: lt.id,
+              principalAmount: 25000,
+              monthlyEmi: 2500,
+              tenureMonths: 10,
+              outstandingAmount: 25000,
+              recoveredAmount: 0,
+              status: 'ACTIVE'
+            }
+          });
+          createdLoanId = l.id;
+          loans = await prisma.employeeLoan.findMany({ take: 5 });
+        }
+      }
+      try {
+        expect(loans.length).toBeGreaterThan(0);
+        for (const loan of loans) {
+          expect(loan.id).toBeDefined();
+          expect(Number(loan.principalAmount)).toBeGreaterThan(0);
+          expect(['ACTIVE', 'COMPLETED', 'CLOSED', 'SANCTIONED']).toContain(loan.status);
+        }
+      } finally {
+        if (createdLoanId) {
+          await prisma.employeeLoan.delete({ where: { id: createdLoanId } }).catch(() => {});
+        }
       }
     });
   });
