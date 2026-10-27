@@ -14,6 +14,7 @@ export interface FormModalProps {
   submitLabel?: string;
   cancelLabel?: string;
   isSubmitting?: boolean;
+  isSubmitDisabled?: boolean;
   isDestructive?: boolean;
 }
 
@@ -30,6 +31,7 @@ export const FormModal: React.FC<FormModalProps> = ({
   submitLabel = 'Save Changes',
   cancelLabel = 'Cancel',
   isSubmitting = false,
+  isSubmitDisabled = false,
   isDestructive = false
 }) => {
   useEffect(() => {
@@ -204,7 +206,7 @@ export const FormModal: React.FC<FormModalProps> = ({
                 type="button"
                 className={`btn ${isDestructive ? 'btn-danger' : 'btn-primary'}`}
                 onClick={(e) => onSubmit(e as any)}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isSubmitDisabled}
                 style={{ minWidth: '100px' }}
               >
                 {isSubmitting ? 'Saving...' : submitLabel}

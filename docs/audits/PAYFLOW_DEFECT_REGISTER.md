@@ -150,4 +150,77 @@
   4. Added backdrop click dismiss handlers and dialog click stopPropagation across all 5 modals in `ExpensesView.tsx` and all 5 modals in `PayrollProcessingView.tsx`.
 - **Retest Outcome**: **PASS**. Forms open cleanly as centered floating overlay modal dialogs with smooth entrance animations and dismiss gracefully. Frontend build (`vite build`) succeeds with 0 errors.
 
+---
+
+### Defect `DEF-09` (Task PF-01): Cramped Modal Employee Registration
+- **Module**: Employee Registration (`ManageEmployeeView.tsx`)
+- **Severity**: `P2 - Usability / Layout Risk`
+- **Issue**: Form opened in a constrained modal dialog with nested scrollbars and clipped statutory sections.
+- **Resolution**: Replaced modal with full-page `ManageEmployeeView.tsx` with 5 organized tabs, breadcrumbs, sticky action bar, dirty state warnings, and API persistence.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-10` (Task PF-02): Missing Profile Data in Employee Details
+- **Module**: Employee Master Profile (`EmployeeProfileModal.tsx`)
+- **Severity**: `P2 - Functional Defect`
+- **Issue**: Employee Details dialog omitted Bank, Statutory, and Custom UDF fields despite successful backend registration.
+- **Resolution**: Implemented multi-tab profile viewer showing complete placement, personal, statutory, compensation, and custom UDF records with sensitive data masking.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-11` (Task PF-03): Salary Column Master Form Polish & Validation
+- **Module**: Salary Heads (`SalaryHeadModal.tsx`)
+- **Severity**: `P3 - UI / Usability`
+- **Issue**: Salary head form lacked formula syntax validation and statutory basis toggles.
+- **Resolution**: Created `SalaryHeadModal.tsx` modal interface with real-time formula verification, PF/ESI/PT/TDS toggles, and sequence ordering.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-12` (Task PF-04): Missing Department-Wise Group Payroll Scoping
+- **Module**: Corporate Payroll (`CreatePayrollRunModal.tsx`, `corporatePayroll.routes.ts`)
+- **Severity**: `P2 - Workflow Incompleteness`
+- **Issue**: Unable to scope monthly payroll by department or employee group with pre-flight eligibility checks.
+- **Resolution**: Implemented `CreatePayrollRunModal.tsx` and backend `GET /runs/preview-eligible` & `POST /runs/draft`.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-13` (Task PF-05): Salary Adjustment Persistence & TDS Override
+- **Module**: Payroll Adjustments (`ManualAdjustmentModal.tsx`, `corporatePayroll.routes.ts`)
+- **Severity**: `P2 - Financial Control Defect`
+- **Issue**: Lacked granular monthly input adjustments with audit trail and TDS withholding overrides.
+- **Resolution**: Integrated `ManualAdjustmentModal.tsx` with backend `PATCH /runs/:id/adjustments` requiring audit reasons and recalculating variance.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-14` (Task PF-06): Loan Form Zero Principal & Inflexible Interest
+- **Module**: Loans & Advances (`loanCalculator.ts`, `loans.routes.ts`)
+- **Severity**: `P1 - Financial Calculation Risk`
+- **Issue**: Form allowed sanctioning zero-value principal and lacked reducing-balance EMI amortization.
+- **Resolution**: Enforced principal `> 0` and `<= loan product limit`, implemented reducing-balance EMI calculation formula, and protected reference loan `b405b4b8-1211-48c5-a59e-ee8db001a906`.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-15` (Task PF-07): Employee Leave Access Restricted & Missing ESS Form
+- **Module**: Employee Self-Service & Leave (`MyLeaveView.tsx`, `LeaveView.tsx`)
+- **Severity**: `P1 - Authorization / Workflow Defect`
+- **Issue**: Employees hit Access Restricted page when accessing leave quotas and had no way to apply for leave.
+- **Resolution**: Built dedicated `MyLeaveView.tsx` with balance cards and application modal, while preserving manager approval queues in `LeaveView.tsx`.
+- **Status**: `RESOLVED & VERIFIED`
+
+---
+
+### Defect `DEF-16` (Task PF-08): 7-Stage Payroll Workbench Empty State & Preview
+- **Module**: Payroll Workbench (`PayrollProcessingView.tsx`)
+- **Severity**: `P2 - Functional Workflow Defect`
+- **Issue**: Review table rendered empty without batch guidance or stage progress indicators.
+- **Resolution**: Added empty state candidate preview, 10 summary KPI cards, 13-column interactive review grid, `<25%` take-home pay warning pills, and payslip modal.
+- **Status**: `RESOLVED & VERIFIED`
+
+
 

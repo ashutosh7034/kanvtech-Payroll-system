@@ -65,7 +65,11 @@ employeeRouter.get('/', authenticate, async (req: Request, res: Response, next: 
             select: { id: true, firstName: true, lastName: true, employeeCode: true }
           },
           salaryStructure: {
-            select: { annualCtc: true, monthlyGross: true }
+            include: {
+              lines: {
+                include: { component: true }
+              }
+            }
           }
         },
         orderBy: { employeeCode: 'asc' },
@@ -134,6 +138,11 @@ employeeRouter.get('/:id', authenticate, async (req: Request, res: Response, nex
               include: { component: true },
               orderBy: { component: { displayOrder: 'asc' } }
             }
+          }
+        },
+        customFieldValues: {
+          include: {
+            fieldDefinition: true
           }
         },
         documents: {
@@ -387,26 +396,37 @@ employeeRouter.put('/:id', authenticate, requireRole(['company_admin', 'hr_manag
     const schema = z.object({
       firstName: z.string().min(1).optional(),
       lastName: z.string().min(1).optional(),
-      personalEmail: z.string().email().optional(),
-      phone: z.string().optional(),
+      workEmail: z.string().email().optional(),
+      personalEmail: z.string().email().optional().or(z.literal('')).transform(v => v || null),
+      phone: z.string().optional().or(z.literal('')).transform(v => v || null),
       gender: z.enum(['MALE', 'FEMALE', 'OTHER']).optional(),
-      maritalStatus: z.string().optional(),
-      bloodGroup: z.string().optional(),
-      emergencyContactName: z.string().optional(),
-      emergencyContactPhone: z.string().optional(),
-      addressLine1: z.string().optional(),
-      city: z.string().optional(),
-      state: z.string().optional(),
-      pinCode: z.string().optional(),
+      maritalStatus: z.string().optional().nullable(),
+      bloodGroup: z.string().optional().nullable(),
+      emergencyContactName: z.string().optional().nullable(),
+      emergencyContactPhone: z.string().optional().nullable(),
+      addressLine1: z.string().optional().nullable(),
+      city: z.string().optional().nullable(),
+      state: z.string().optional().nullable(),
+      pinCode: z.string().optional().nullable(),
       workMode: z.enum(['OFFICE', 'REMOTE', 'HYBRID']).optional(),
-      panNumber: z.string().optional(),
-      uanNumber: z.string().optional(),
-      pfNumber: z.string().optional(),
-      esicNumber: z.string().optional(),
-      bankName: z.string().optional(),
-      bankAccountNumber: z.string().optional(),
-      ifscCode: z.string().optional(),
-      bankBranch: z.string().optional()
+      employmentType: z.enum(['PERMANENT', 'PROBATIONARY', 'CONTRACTUAL', 'CONSULTANT', 'INTERN', 'PART_TIME']).optional(),
+      status: z.enum(['ACTIVE', 'PROBATION', 'CONFIRMED', 'NOTICE_PERIOD', 'SUSPENDED', 'EXITED']).optional(),
+      branchId: z.string().optional(),
+      departmentId: z.string().optional(),
+      designationId: z.string().optional(),
+      jobBandId: z.string().optional().nullable(),
+      costCenterId: z.string().optional().nullable(),
+      dateOfBirth: z.string().optional().nullable().transform(v => v ? new Date(v) : null),
+      dateOfJoining: z.string().optional().transform(v => v ? new Date(v) : undefined),
+      probationDays: z.number().optional(),
+      panNumber: z.string().optional().nullable(),
+      uanNumber: z.string().optional().nullable(),
+      pfNumber: z.string().optional().nullable(),
+      esicNumber: z.string().optional().nullable(),
+      bankName: z.string().optional().nullable(),
+      bankAccountNumber: z.string().optional().nullable(),
+      ifscCode: z.string().optional().nullable(),
+      bankBranch: z.string().optional().nullable()
     });
     const data = schema.parse(req.body);
 

@@ -32,6 +32,7 @@ describe('Corporate HRMS & Payroll Platform - Complete Workflow Suite', () => {
     if (empUser?.employeeId) {
       await prisma.fnfSettlement.deleteMany({ where: { employeeId: empUser.employeeId } });
       await prisma.resignation.deleteMany({ where: { employeeId: empUser.employeeId } });
+      await prisma.employeeLoan.deleteMany({ where: { employeeId: empUser.employeeId } });
       await prisma.employee.update({ where: { id: empUser.employeeId }, data: { status: 'CONFIRMED' } });
     }
   });
@@ -191,9 +192,16 @@ describe('Corporate HRMS & Payroll Platform - Complete Workflow Suite', () => {
     const clPolicy = policiesRes.body.policies.find((p: any) => p.code === 'CL');
     expect(clPolicy).toBeDefined();
 
-    // Ensure sufficient balance for idempotent test execution
+    // Ensure sufficient balance and clean slate for idempotent test execution
     const rahulUser = await prisma.user.findUnique({ where: { username: 'rahul.mehta' } });
     if (rahulUser?.employeeId) {
+      await prisma.leaveRequest.deleteMany({
+        where: {
+          employeeId: rahulUser.employeeId,
+          fromDate: { lte: new Date('2026-11-06') },
+          toDate: { gte: new Date('2026-11-05') }
+        }
+      });
       await prisma.employeeLeaveBalance.updateMany({
         where: { employeeId: rahulUser.employeeId, leavePolicyId: clPolicy.id },
         data: { balance: 10 }

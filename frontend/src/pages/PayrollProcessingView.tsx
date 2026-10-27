@@ -28,8 +28,18 @@ import {
   CreditCard,
   DollarSign,
   Eye,
-  Info
+  Info,
+  Filter,
+  Users,
+  Building,
+  TrendingUp,
+  TrendingDown,
+  Search
 } from 'lucide-react';
+import { CreatePayrollRunModal } from '../components/payroll/CreatePayrollRunModal';
+import { ManualAdjustmentModal } from '../components/payroll/ManualAdjustmentModal';
+import { TdsDeferralModal } from '../components/payroll/TdsDeferralModal';
+import { DetailedCalculationModal } from '../components/payroll/DetailedCalculationModal';
 
 interface StageDefinition {
   stage: number;
@@ -87,15 +97,44 @@ export const PayrollProcessingView: React.FC = () => {
   const [editorRunId, setEditorRunId] = useState<string>('');
   const [editorData, setEditorData] = useState<any | null>(null);
   const [editorEmployees, setEditorEmployees] = useState<any[]>([]);
+  const [editorOriginalEmployees, setEditorOriginalEmployees] = useState<any[]>([]);
   const [loadingEditor, setLoadingEditor] = useState(false);
   const [savingAdjustments, setSavingAdjustments] = useState(false);
   const [highlightNet25, setHighlightNet25] = useState(true);
+  const [editorSearch, setEditorSearch] = useState('');
+  const [editorDeptFilter, setEditorDeptFilter] = useState('ALL');
+  const [editorStatusFilter, setEditorStatusFilter] = useState('ALL');
+  const [showModifiedOnly, setShowModifiedOnly] = useState(false);
 
   // TDS Process State
   const [tdsPeriodId, setTdsPeriodId] = useState<string>('');
   const [tdsSummary, setTdsSummary] = useState<any | null>(null);
   const [loadingTds, setLoadingTds] = useState(false);
   const [portingTds, setPortingTds] = useState(false);
+
+  // Task 4: Review Table & Department Subtotals State (Section 4)
+  const [reviewTableData, setReviewTableData] = useState<any | null>(null);
+  const [loadingReviewTable, setLoadingReviewTable] = useState(false);
+  const [reviewDeptFilter, setReviewDeptFilter] = useState('ALL');
+
+  // Task 4: Sub-Modals State
+  const [showAdjustmentModal, setShowAdjustmentModal] = useState(false);
+  const [selectedEmployeeForRow, setSelectedEmployeeForRow] = useState<any | null>(null);
+  const [showTdsModal, setShowTdsModal] = useState(false);
+  const [showCalcModal, setShowCalcModal] = useState(false);
+  const [selectedCalcRow, setSelectedCalcRow] = useState<any | null>(null);
+
+  const fetchReviewTable = async (runId: string) => {
+    setLoadingReviewTable(true);
+    try {
+      const res: any = await api.get(`/payroll/runs/${runId}/review-table`);
+      setReviewTableData(res);
+    } catch (err) {
+      console.error('Failed to load review table:', err);
+    } finally {
+      setLoadingReviewTable(false);
+    }
+  };
 
   const fetchRuns = async () => {
     setLoadingRuns(true);
@@ -104,8 +143,15 @@ export const PayrollProcessingView: React.FC = () => {
       const fetchedRuns = res.runs || [];
       setRuns(fetchedRuns);
       if (fetchedRuns.length > 0) {
-        if (!editorRunId) setEditorRunId(fetchedRuns[0].id);
-        if (!selectedRun) setSelectedRun(fetchedRuns[0]);
+        const defaultRun = fetchedRuns[0];
+        if (!editorRunId) {
+          setEditorRunId(defaultRun.id);
+          loadEditorData(defaultRun.id);
+        }
+        if (!selectedRun) {
+          setSelectedRun(defaultRun);
+          fetchReviewTable(defaultRun.id);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch payroll runs:', err);
@@ -133,10 +179,23 @@ export const PayrollProcessingView: React.FC = () => {
     fetchPeriods();
   }, []);
 
+  useEffect(() => {
+    if (activeTab === 'editor' && editorRunId) {
+      loadEditorData(editorRunId);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
+    if (editorRunId) {
+      loadEditorData(editorRunId);
+    }
+  }, [editorRunId]);
+
   const viewRunDetails = async (runId: string) => {
     try {
       const res: any = await api.get(`/payroll/runs/${runId}`);
       setSelectedRun(res.run);
+      fetchReviewTable(runId);
     } catch (err) {
       console.error(err);
     }
@@ -307,11 +366,14 @@ export const PayrollProcessingView: React.FC = () => {
 
   // Salary Editor loader
   const loadEditorData = async (runId: string) => {
+    if (!runId) return;
     setLoadingEditor(true);
     try {
       const res: any = await api.get(`/payroll/runs/${runId}/editor`);
       setEditorData(res);
-      setEditorEmployees(res.employees || []);
+      const list = res.rows || res.employees || [];
+      setEditorEmployees(list);
+      setEditorOriginalEmployees(JSON.parse(JSON.stringify(list)));
     } catch (err: any) {
       console.error('Failed to load salary editor data:', err);
     } finally {
@@ -324,20 +386,26 @@ export const PayrollProcessingView: React.FC = () => {
     setSavingAdjustments(true);
     try {
       const adjustments = editorEmployees.map(emp => ({
-        employeeId: emp.id,
+        employeeId: emp.employeeId || emp.id,
+        slipId: emp.slipId,
         leaveLossOfPayDays: Number(emp.lopDays || 0),
         otHours: Number(emp.otHours || 0),
         otRatePerHour: Number(emp.otRate || 0),
-        arrearsAmount: Number(emp.arrears || 0),
-        variableAllowance: Number(emp.variableAllowance || 0),
+        arrearsAmount: Number(emp.arrearsAmount ?? emp.arrears ?? 0),
+        variableAllowance: Number(emp.variableAllowance ?? emp.variableEarnings ?? 0),
         manualDeduction: Number(emp.manualDeduction || 0)
       }));
 
       await api.patch(`/payroll/runs/${editorRunId}/adjustments`, { adjustments });
-      alert('Salary input adjustments persisted successfully.');
+      setActionSuccess('Salary input adjustments persisted successfully.');
       await loadEditorData(editorRunId);
+      await fetchRuns();
+      if (selectedRun?.id === editorRunId) {
+        viewRunDetails(editorRunId);
+        fetchReviewTable(editorRunId);
+      }
     } catch (err: any) {
-      alert(err.message || 'Failed to persist adjustments');
+      setActionError(err.message || 'Failed to persist adjustments');
     } finally {
       setSavingAdjustments(false);
     }
@@ -676,7 +744,7 @@ export const PayrollProcessingView: React.FC = () => {
           </div>
 
           {/* Real Summary Metrics Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '12px' }}>
             <div className="panel" style={{ padding: '14px', margin: 0 }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Employees Included</div>
               <div style={{ fontSize: '1.4rem', fontWeight: 700, marginTop: '4px' }}>{totalEmployees}</div>
@@ -686,9 +754,11 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0, borderLeft: '4px solid #10b981' }}>
               <div style={{ fontSize: '0.75rem', color: '#047857', fontWeight: 600 }}>Calculated Staff</div>
               <div style={{ fontSize: '1.4rem', fontWeight: 700, color: '#047857', marginTop: '4px' }}>
-                {activeRun?.slips?.length || activeRun?.records?.length || totalEmployees}
+                {activeRun?.slips?.length || activeRun?.records?.length || (['CALCULATED', 'REVIEWED', 'APPROVED', 'PAYMENT_READY', 'PAID'].includes(activeRun?.status) ? totalEmployees : 0)}
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>With active CTC structures</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {['DRAFT', 'VALIDATED'].includes(activeRun?.status) ? 'Awaiting calculation' : 'Calculated in batch'}
+              </div>
             </div>
 
             <div className="panel" style={{ padding: '14px', margin: 0, borderLeft: exceptionsCount > 0 ? '4px solid #f59e0b' : '4px solid var(--border-color)' }}>
@@ -699,7 +769,7 @@ export const PayrollProcessingView: React.FC = () => {
                 {exceptionsCount}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                {exceptionsCount > 0 ? 'Audit warnings / LOP notes' : 'Zero exceptions detected'}
+                {exceptionsCount > 0 ? 'Audit warnings / exceptions' : 'Zero exceptions detected'}
               </div>
             </div>
 
@@ -708,7 +778,9 @@ export const PayrollProcessingView: React.FC = () => {
               <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
                 ₹{grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>Total earnings basis</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {activeRun?.status === 'PAID' ? 'Finalized earnings basis' : 'Total earnings basis'}
+              </div>
             </div>
 
             <div className="panel" style={{ padding: '14px', margin: 0 }}>
@@ -724,7 +796,25 @@ export const PayrollProcessingView: React.FC = () => {
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0284c7', marginTop: '4px' }}>
                 ₹{netPayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
               </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>Net take-home pay</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                {activeRun?.status === 'PAID' ? 'Finalized take-home' : 'Estimated take-home'}
+              </div>
+            </div>
+
+            <div className="panel" style={{ padding: '14px', margin: 0 }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Employer Contributions</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
+                ₹{Math.max(0, Number(activeRun?.totalEmployerCost ?? 0) - grossTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>PF, ESI & statutory dues</div>
+            </div>
+
+            <div className="panel" style={{ padding: '14px', margin: 0, borderLeft: '4px solid #6366f1' }}>
+              <div style={{ fontSize: '0.75rem', color: '#4f46e5', fontWeight: 600 }}>Total Employer Cost</div>
+              <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#4f46e5', marginTop: '4px' }}>
+                ₹{Number(activeRun?.totalEmployerCost ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>Total CTC cost</div>
             </div>
           </div>
 
@@ -865,211 +955,848 @@ export const PayrollProcessingView: React.FC = () => {
             </div>
           </div>
 
-          {/* Drilldown: Employee Level Calculations & Slips for Selected Run */}
-          {selectedRun && (
-            <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
-              <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <strong style={{ fontSize: '0.95rem' }}>Employee Salary Calculations: {selectedRun.period?.name || selectedRun.runNumber}</strong>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                    Detailed earnings, deductions, LOP, and net take-home breakdown per employee.
+          {/* ========================================================================= */}
+          {/* SECTION 4: AUTHORITATIVE 12-COLUMN PAYROLL REVIEW & AUDIT SCREEN          */}
+          {/* ========================================================================= */}
+          {selectedRun && (() => {
+            const allRows = reviewTableData?.rows || (selectedRun?.slips || []).map((s: any) => ({
+              slipId: s.id,
+              employeeId: s.employeeId,
+              employeeCode: s.employee?.employeeCode,
+              employeeName: `${s.employee?.firstName} ${s.employee?.lastName}`,
+              department: s.employee?.department?.name || 'General',
+              payableDays: Number(s.payableDays || 30),
+              lopDays: Number(s.lopDays || 0),
+              grossEarnings: Number(s.grossPay || 0),
+              manualAdjustments: 0,
+              employeeDeductions: Number(s.deductionsPay || 0),
+              tds: Number(s.tdsWithholding || 0),
+              employerContributions: Number(s.employerCost || 0),
+              netPay: Number(s.netPay || 0),
+              status: selectedRun.status,
+              items: s.items || []
+            }));
+
+            const filteredRows = reviewDeptFilter === 'ALL'
+              ? allRows
+              : allRows.filter((r: any) => r.department === reviewDeptFilter);
+
+            const deptSummaries = reviewTableData?.departmentSummaries || [];
+            const grandTotals = reviewTableData?.grandTotals || {
+              totalEmployees: allRows.length,
+              grossEarnings: allRows.reduce((sum: number, r: any) => sum + r.grossEarnings, 0),
+              manualAdjustments: allRows.reduce((sum: number, r: any) => sum + r.manualAdjustments, 0),
+              employeeDeductions: allRows.reduce((sum: number, r: any) => sum + r.employeeDeductions, 0),
+              tds: allRows.reduce((sum: number, r: any) => sum + r.tds, 0),
+              employerContributions: allRows.reduce((sum: number, r: any) => sum + r.employerContributions, 0),
+              netPay: allRows.reduce((sum: number, r: any) => sum + r.netPay, 0)
+            };
+
+            const uniqueDepts: string[] = Array.from(new Set(allRows.map((r: any) => r.department))).filter(Boolean) as string[];
+
+            return (
+              <div className="panel" style={{ padding: 0, overflow: 'hidden' }}>
+                {/* Header & Department Filter Bar */}
+                <div
+                  style={{
+                    padding: '16px 20px',
+                    borderBottom: '1px solid var(--border-color)',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    flexWrap: 'wrap',
+                    gap: '12px'
+                  }}
+                >
+                  <div>
+                    <strong style={{ fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <FileText size={17} style={{ color: 'var(--primary)' }} />
+                      Payroll Review & Audit Workspace: {selectedRun.period?.name || selectedRun.runNumber}
+                    </strong>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                      Section 4 Standardized 12-Field Financial Reconciliation • Department Subtotals • Drilldown Calculations
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {/* Department Selector Filter */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Filter size={13} style={{ color: 'var(--text-muted)' }} />
+                      <select
+                        className="form-control"
+                        value={reviewDeptFilter}
+                        onChange={e => setReviewDeptFilter(e.target.value)}
+                        style={{ fontSize: '0.75rem', padding: '4px 8px', height: '30px', minWidth: '170px' }}
+                      >
+                        <option value="ALL">All Departments ({allRows.length})</option>
+                        {uniqueDepts.map(d => (
+                          <option key={d} value={d}>
+                            {d} ({allRows.filter((r: any) => r.department === d).length})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <button
+                      className="btn btn-outline btn-xs"
+                      onClick={() => fetchReviewTable(selectedRun.id)}
+                      title="Refresh Review Data"
+                    >
+                      <RotateCcw size={12} /> Refresh
+                    </button>
+
+                    <button
+                      className="btn btn-outline btn-xs"
+                      onClick={() => {
+                        setEditorRunId(selectedRun.id);
+                        setActiveTab('editor');
+                      }}
+                    >
+                      <Edit3 size={12} /> Batch Editor
+                    </button>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  <button
-                    className="btn btn-outline btn-xs"
-                    onClick={() => {
-                      setEditorRunId(selectedRun.id);
-                      setActiveTab('editor');
+                {/* Department Subtotals Strip */}
+                {deptSummaries.length > 0 && reviewDeptFilter === 'ALL' && (
+                  <div
+                    style={{
+                      background: '#f8fafc',
+                      padding: '10px 16px',
+                      borderBottom: '1px solid var(--border-color)',
+                      display: 'flex',
+                      gap: '10px',
+                      overflowX: 'auto'
                     }}
                   >
-                    <Edit3 size={13} /> Open in Salary Editor
-                  </button>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600, display: 'flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+                      <Building size={13} style={{ marginRight: '4px' }} /> Department Subtotals:
+                    </div>
+                    {deptSummaries.map((ds: any) => (
+                      <div
+                        key={ds.departmentId}
+                        onClick={() => setReviewDeptFilter(ds.departmentName)}
+                        style={{
+                          padding: '4px 10px',
+                          background: '#ffffff',
+                          border: '1px solid var(--border-color)',
+                          borderRadius: 'var(--radius-sm)',
+                          fontSize: '0.725rem',
+                          whiteSpace: 'nowrap',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px'
+                        }}
+                        title={`Click to filter by ${ds.departmentName}`}
+                      >
+                        <strong>{ds.departmentName}</strong>
+                        <span className="badge badge-gray" style={{ fontSize: '0.65rem' }}>{ds.employeeCount} staff</span>
+                        <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
+                          ₹{Number(ds.netPay).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* 12-Column Authoritative Table */}
+                <div className="table-container" style={{ border: 'none', maxHeight: '550px', overflowY: 'auto' }}>
+                  <table className="data-table" style={{ fontSize: '0.75rem', margin: 0 }}>
+                    <thead>
+                      <tr style={{ background: '#f8fafc', position: 'sticky', top: 0, zIndex: 2 }}>
+                        <th>Emp Code</th>
+                        <th>Employee Name</th>
+                        <th>Department</th>
+                        <th style={{ textAlign: 'center' }}>Payable Days</th>
+                        <th className="money">Gross Earnings</th>
+                        <th className="money">Manual Adj</th>
+                        <th className="money">Deductions</th>
+                        <th className="money">TDS</th>
+                        <th className="money">Employer Cost</th>
+                        <th className="money">Net Pay</th>
+                        <th style={{ textAlign: 'center' }}>Status</th>
+                        <th style={{ textAlign: 'right', minWidth: '190px' }}>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {loadingReviewTable ? (
+                        <tr>
+                          <td colSpan={12} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                            Loading financial review and department subtotals...
+                          </td>
+                        </tr>
+                      ) : filteredRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={12} style={{ textAlign: 'center', padding: '30px', color: 'var(--text-muted)' }}>
+                            No employees calculated in this run. Click "Calculate Salary Math (Stage 3)" to execute payroll.
+                          </td>
+                        </tr>
+                      ) : (
+                        filteredRows.map((row: any) => {
+                          const hasAdj = row.manualAdjustments !== 0;
+                          return (
+                            <tr key={row.slipId || row.employeeId}>
+                              <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{row.employeeCode}</td>
+                              <td><strong>{row.employeeName}</strong></td>
+                              <td>{row.department}</td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span>{row.payableDays}</span>
+                                {row.lopDays > 0 && (
+                                  <span style={{ color: '#b45309', fontSize: '0.675rem', marginLeft: '4px' }} title={`${row.lopDays} LOP Days`}>
+                                    (-{row.lopDays})
+                                  </span>
+                                )}
+                              </td>
+                              <td className="money">
+                                ₹{row.grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="money">
+                                {hasAdj ? (
+                                  <span
+                                    className={`badge ${row.manualAdjustments > 0 ? 'badge-success' : 'badge-danger'}`}
+                                    style={{ fontSize: '0.675rem' }}
+                                  >
+                                    {row.manualAdjustments > 0 ? '+' : ''}₹{row.manualAdjustments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                  </span>
+                                ) : (
+                                  <span style={{ color: 'var(--text-muted)' }}>—</span>
+                                )}
+                              </td>
+                              <td className="money" style={{ color: 'var(--danger)' }}>
+                                ₹{row.employeeDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="money" style={{ color: '#92400e' }}>
+                                ₹{row.tds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="money" style={{ color: 'var(--text-muted)' }}>
+                                ₹{row.employerContributions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td className="money" style={{ fontWeight: 700, color: 'var(--primary)' }}>
+                                ₹{row.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                              </td>
+                              <td style={{ textAlign: 'center' }}>
+                                <span
+                                  className={`badge ${
+                                    row.status === 'PAID'
+                                      ? 'badge-success'
+                                      : row.status === 'APPROVED' || row.status === 'PAYMENT_READY'
+                                      ? 'badge-brand'
+                                      : row.status === 'REVIEWED' || row.status === 'CALCULATED'
+                                      ? 'badge-warning'
+                                      : 'badge-gray'
+                                  }`}
+                                  style={{ fontSize: '0.675rem' }}
+                                >
+                                  {row.status}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
+                                  <button
+                                    className="btn btn-outline btn-xs"
+                                    onClick={() => {
+                                      setSelectedCalcRow(row);
+                                      setShowCalcModal(true);
+                                    }}
+                                    title="View Detailed Calculation Breakdown"
+                                  >
+                                    <Eye size={12} /> Calc
+                                  </button>
+                                  <button
+                                    className="btn btn-outline btn-xs"
+                                    onClick={() => {
+                                      setSelectedEmployeeForRow(row);
+                                      setShowAdjustmentModal(true);
+                                    }}
+                                    title="Manual Salary Adjustment"
+                                  >
+                                    <Edit3 size={12} /> Adjust
+                                  </button>
+                                  <button
+                                    className="btn btn-outline btn-xs"
+                                    onClick={() => {
+                                      setSelectedEmployeeForRow(row);
+                                      setShowTdsModal(true);
+                                    }}
+                                    title="TDS Deferral & Multi-Month Recovery"
+                                  >
+                                    <Calculator size={12} /> TDS
+                                  </button>
+                                  <button
+                                    className="btn btn-outline btn-xs"
+                                    onClick={() => openPayslip(row.slipId)}
+                                    title="View Formal Payslip"
+                                  >
+                                    <FileText size={12} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {/* Table Footer: Reconciled Grand Totals */}
+                    <tfoot>
+                      <tr style={{ background: '#f8fafc', fontWeight: 700, borderTop: '2px solid var(--border-color)' }}>
+                        <td colSpan={3}>
+                          Grand Totals ({filteredRows.length} staff{reviewDeptFilter !== 'ALL' ? ` in ${reviewDeptFilter}` : ''})
+                        </td>
+                        <td style={{ textAlign: 'center' }}>—</td>
+                        <td className="money">
+                          ₹{grandTotals.grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="money">
+                          {grandTotals.manualAdjustments !== 0 ? (
+                            `₹${grandTotals.manualAdjustments > 0 ? '+' : ''}${grandTotals.manualAdjustments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                          ) : '—'}
+                        </td>
+                        <td className="money" style={{ color: 'var(--danger)' }}>
+                          ₹{grandTotals.employeeDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="money" style={{ color: '#92400e' }}>
+                          ₹{grandTotals.tds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="money">
+                          ₹{grandTotals.employerContributions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td className="money" style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>
+                          ₹{grandTotals.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        </td>
+                        <td colSpan={2}></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
+            );
+          })()}
+        </div>
+      )}
 
-              <div className="table-container" style={{ border: 'none' }}>
+      {/* ========================================================================= */}
+      {/* TAB 2: SALARY REVIEW & INPUT ADJUSTMENT EDITOR (Saral Parity)            */}
+      {/* ========================================================================= */}
+      {activeTab === 'editor' && (() => {
+        const uniqueDepartments = Array.from(new Set(editorEmployees.map(e => e.department))).filter(Boolean) as string[];
+
+        // Filter employees
+        const filteredEmployees = editorEmployees.filter(emp => {
+          // Search query
+          if (editorSearch.trim()) {
+            const q = editorSearch.toLowerCase();
+            const code = (emp.employeeCode || '').toLowerCase();
+            const name = (emp.employeeName || '').toLowerCase();
+            if (!code.includes(q) && !name.includes(q)) return false;
+          }
+          // Department filter
+          if (editorDeptFilter !== 'ALL' && emp.department !== editorDeptFilter) {
+            return false;
+          }
+          // Status / Exception filter
+          if (editorStatusFilter === 'LOP') {
+            if (!emp.lopDays || Number(emp.lopDays) <= 0) return false;
+          } else if (editorStatusFilter === 'OT') {
+            if (!emp.otHours || Number(emp.otHours) <= 0) return false;
+          } else if (editorStatusFilter === 'ARREARS') {
+            if (!emp.arrears && !emp.arrearsAmount) return false;
+          } else if (editorStatusFilter === 'VARIABLE') {
+            if (!emp.variableAllowance && !emp.variableEarnings) return false;
+          } else if (editorStatusFilter === 'NET25') {
+            if (!emp.isNetLessThan25Percent) return false;
+          } else if (editorStatusFilter === 'MISSING') {
+            if (emp.calculationStatus !== 'MISSING_STRUCTURE' && (!emp.validationErrors || emp.validationErrors.length === 0)) return false;
+          }
+
+          // Modified only filter
+          if (showModifiedOnly) {
+            const orig = editorOriginalEmployees.find(o => (o.employeeId || o.id) === (emp.employeeId || emp.id));
+            if (!orig) return false;
+            const lopChanged = Number(emp.lopDays || 0) !== Number(orig.lopDays || 0);
+            const otChanged = Number(emp.otHours || 0) !== Number(orig.otHours || 0);
+            const arrearsChanged = Number(emp.arrears ?? emp.arrearsAmount ?? 0) !== Number(orig.arrears ?? orig.arrearsAmount ?? 0);
+            const varChanged = Number(emp.variableAllowance ?? emp.variableEarnings ?? 0) !== Number(orig.variableAllowance ?? orig.variableEarnings ?? 0);
+            const dedChanged = Number(emp.manualDeduction || 0) !== Number(orig.manualDeduction || 0);
+            if (!lopChanged && !otChanged && !arrearsChanged && !varChanged && !dedChanged) return false;
+          }
+
+          return true;
+        });
+
+        // Summary calculations
+        const sumLop = editorEmployees.reduce((sum, e) => sum + Number(e.lopDays || 0), 0);
+        const sumOt = editorEmployees.reduce((sum, e) => sum + Number(e.otHours || 0), 0);
+        const sumArrears = editorEmployees.reduce((sum, e) => sum + Number(e.arrears ?? e.arrearsAmount ?? 0), 0);
+        const sumVariable = editorEmployees.reduce((sum, e) => sum + Number(e.variableAllowance ?? e.variableEarnings ?? 0), 0);
+        const sumManualDed = editorEmployees.reduce((sum, e) => sum + Number(e.manualDeduction || 0), 0);
+        const sumGross = editorEmployees.reduce((sum, e) => sum + Number(e.grossPay || 0), 0);
+        const sumNet = editorEmployees.reduce((sum, e) => sum + Number(e.netPay || 0), 0);
+
+        return (
+          <div className="panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            {/* Header with Run Selector and Save Button */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>
+                  Salary Review & Input Adjustment Editor
+                </h3>
+                <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                  Inspect eligible employee attendance, loss-of-pay (LOP), overtime, arrears, and variable earnings. Adjust inputs with live preview before final authorization.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <select
+                  className="form-control"
+                  value={editorRunId}
+                  onChange={e => {
+                    setEditorRunId(e.target.value);
+                    loadEditorData(e.target.value);
+                  }}
+                  style={{ fontSize: '0.8rem', minWidth: '220px' }}
+                >
+                  {runs.length === 0 ? (
+                    <option value="">No payroll runs found</option>
+                  ) : (
+                    runs.map(r => (
+                      <option key={r.id} value={r.id}>
+                        {r.period?.name || r.runNumber} ({r.status})
+                      </option>
+                    ))
+                  )}
+                </select>
+
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() => loadEditorData(editorRunId)}
+                  disabled={loadingEditor || !editorRunId}
+                  title="Reload editor data"
+                >
+                  <RotateCcw size={13} /> Refresh
+                </button>
+
+                <button
+                  className="btn btn-primary btn-sm"
+                  onClick={handleSaveAdjustments}
+                  disabled={savingAdjustments || !editorRunId || editorEmployees.length === 0}
+                >
+                  <Save size={13} /> {savingAdjustments ? 'Persisting...' : 'Save Salary Adjustments'}
+                </button>
+              </div>
+            </div>
+
+            {/* Editor Quick KPI Cards */}
+            {editorEmployees.length > 0 && (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Staff</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{editorEmployees.length}</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: sumLop > 0 ? '#b45309' : 'var(--text-muted)', fontWeight: 600 }}>Total LOP Days</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: sumLop > 0 ? '#b45309' : 'inherit', marginTop: '2px' }}>
+                    {sumLop.toFixed(1)}
+                  </div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Overtime Hours</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{sumOt.toFixed(1)} hrs</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Arrears</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumArrears.toLocaleString('en-IN')}</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Variable Pay</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumVariable.toLocaleString('en-IN')}</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 600 }}>Manual Ded.</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--danger)', marginTop: '2px' }}>₹{sumManualDed.toLocaleString('en-IN')}</div>
+                </div>
+                <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Gross Payroll</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumGross.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                </div>
+                <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
+                  <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 600 }}>Net Disbursable</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#166534', marginTop: '2px' }}>₹{sumNet.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Filter & Search Toolbar */}
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                flexWrap: 'wrap',
+                gap: '10px',
+                background: '#f8fafc',
+                padding: '10px 14px',
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--border-color)'
+              }}
+            >
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', flex: 1 }}>
+                <div style={{ position: 'relative', minWidth: '220px', maxWidth: '320px' }}>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="Search staff code or name..."
+                    value={editorSearch}
+                    onChange={e => setEditorSearch(e.target.value)}
+                    style={{ fontSize: '0.8rem', paddingLeft: '28px' }}
+                  />
+                  <Search size={14} style={{ position: 'absolute', left: '9px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  {editorSearch && (
+                    <button
+                      onClick={() => setEditorSearch('')}
+                      style={{ position: 'absolute', right: '8px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)' }}
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  className="form-control"
+                  value={editorDeptFilter}
+                  onChange={e => setEditorDeptFilter(e.target.value)}
+                  style={{ fontSize: '0.8rem', minWidth: '150px' }}
+                >
+                  <option value="ALL">All Departments</option>
+                  {uniqueDepartments.map(d => (
+                    <option key={d} value={d}>{d}</option>
+                  ))}
+                </select>
+
+                <select
+                  className="form-control"
+                  value={editorStatusFilter}
+                  onChange={e => setEditorStatusFilter(e.target.value)}
+                  style={{ fontSize: '0.8rem', minWidth: '160px' }}
+                >
+                  <option value="ALL">All Employees</option>
+                  <option value="LOP">Has Loss of Pay (LOP)</option>
+                  <option value="OT">Has Overtime (OT)</option>
+                  <option value="ARREARS">Has Arrears</option>
+                  <option value="VARIABLE">Has Variable Pay</option>
+                  <option value="NET25">Take-Home &lt; 25% (Warning)</option>
+                  <option value="MISSING">Missing CTC Structure</option>
+                </select>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', cursor: 'pointer', userSelect: 'none' }}>
+                  <input
+                    type="checkbox"
+                    checked={showModifiedOnly}
+                    onChange={e => setShowModifiedOnly(e.target.checked)}
+                  />
+                  <span>Show Modified Only</span>
+                </label>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                  Showing: <strong>{filteredEmployees.length}</strong> of {editorEmployees.length} staff
+                </div>
+              </div>
+            </div>
+
+            {/* Table or Empty States */}
+            {loadingEditor ? (
+              <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <Calculator size={32} style={{ opacity: 0.3, marginBottom: '10px' }} />
+                <div>Loading salary adjustments sheet & attendance proration data...</div>
+              </div>
+            ) : editorEmployees.length === 0 ? (
+              <div
+                style={{
+                  padding: '50px 20px',
+                  textAlign: 'center',
+                  background: '#f8fafc',
+                  border: '1px dashed var(--border-color)',
+                  borderRadius: 'var(--radius-md)'
+                }}
+              >
+                <Layers size={36} style={{ opacity: 0.3, marginBottom: '10px', color: 'var(--primary)' }} />
+                <h4 style={{ margin: '0 0 6px', fontSize: '1rem', fontWeight: 600 }}>
+                  {!editorRunId ? 'No Payroll Run Selected' : 'No Employees in Selected Payroll Run'}
+                </h4>
+                <p style={{ margin: '0 0 16px', color: 'var(--text-muted)', fontSize: '0.825rem', maxWidth: '480px', marginInline: 'auto' }}>
+                  {!editorRunId
+                    ? 'Please initialize a payroll batch or select an existing monthly payroll run to review and adjust employee salaries.'
+                    : 'The candidate scope established for this run contains no eligible employees with active employment status during this period, or employees require salary structure assignment.'}
+                </p>
+                {hasRole(['payroll_admin', 'company_admin']) && (
+                  <button className="btn btn-primary btn-sm" onClick={() => setShowGenerateModal(true)}>
+                    <Play size={13} /> Initialize Payroll Batch (Stage 1)
+                  </button>
+                )}
+              </div>
+            ) : filteredEmployees.length === 0 ? (
+              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                <Filter size={28} style={{ opacity: 0.3, marginBottom: '8px' }} />
+                <div>No employees match your filter criteria. Try clearing the search or status filter.</div>
+              </div>
+            ) : (
+              <div className="table-container" style={{ maxHeight: '600px', overflowY: 'auto' }}>
                 <table className="data-table">
                   <thead>
                     <tr>
-                      <th>Employee Code</th>
-                      <th>Employee Name</th>
-                      <th>Department</th>
-                      <th>Payable Days / LOP</th>
-                      <th className="money">Gross Salary</th>
-                      <th className="money">Deductions</th>
-                      <th className="money">Net Salary</th>
-                      <th style={{ textAlign: 'right' }}>Slip</th>
+                      <th style={{ minWidth: '160px' }}>Staff & Department</th>
+                      <th style={{ minWidth: '130px' }}>Salary Structure</th>
+                      <th style={{ minWidth: '100px' }}>Working / Payable</th>
+                      <th style={{ width: '85px' }}>LOP Days</th>
+                      <th style={{ width: '85px' }}>OT (Hours)</th>
+                      <th style={{ width: '105px' }}>Arrears (₹)</th>
+                      <th style={{ width: '105px' }}>Variable (₹)</th>
+                      <th style={{ width: '105px' }}>Manual Ded. (₹)</th>
+                      <th className="money" style={{ minWidth: '85px' }}>TDS (₹)</th>
+                      <th className="money" style={{ minWidth: '100px' }}>Gross Salary</th>
+                      <th className="money" style={{ minWidth: '100px' }}>Deductions</th>
+                      <th className="money" style={{ minWidth: '110px' }}>Net Pay</th>
+                      <th style={{ textAlign: 'center', width: '110px' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {((selectedRun.slips || selectedRun.records) || []).map((rec: any) => (
-                      <tr key={rec.id}>
-                        <td style={{ fontFamily: 'var(--font-mono)' }}>{rec.employee?.employeeCode}</td>
-                        <td><strong>{rec.employee?.firstName} {rec.employee?.lastName}</strong></td>
-                        <td>{rec.employee?.department?.name || 'General'}</td>
-                        <td>{rec.payableDays} / {Number(rec.lopDays ?? rec.leaveLossOfPayDays ?? 0)}</td>
-                        <td className="money">
-                          ₹{Number(rec.grossPay ?? rec.grossAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="money" style={{ color: 'var(--danger)' }}>
-                          ₹{Number(rec.deductionsPay ?? rec.deductionAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="money" style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                          ₹{Number(rec.netPay ?? rec.netAmount ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <button className="btn btn-outline btn-xs" onClick={() => openPayslip(rec.id)}>
-                            <FileText size={12} /> View Payslip
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {filteredEmployees.map((emp) => {
+                      const idx = editorEmployees.findIndex(e => (e.employeeId || e.id) === (emp.employeeId || emp.id));
+                      const orig = editorOriginalEmployees.find(o => (o.employeeId || o.id) === (emp.employeeId || emp.id));
+                      const isLopModified = orig && Number(emp.lopDays || 0) !== Number(orig.lopDays || 0);
+                      const isOtModified = orig && Number(emp.otHours || 0) !== Number(orig.otHours || 0);
+                      const isArrearsModified = orig && Number(emp.arrears ?? emp.arrearsAmount ?? 0) !== Number(orig.arrears ?? orig.arrearsAmount ?? 0);
+                      const isVarModified = orig && Number(emp.variableAllowance ?? emp.variableEarnings ?? 0) !== Number(orig.variableAllowance ?? orig.variableEarnings ?? 0);
+                      const isDedModified = orig && Number(emp.manualDeduction || 0) !== Number(orig.manualDeduction || 0);
+
+                      return (
+                        <tr
+                          key={emp.employeeId || emp.id}
+                          style={{
+                            background: emp.isNetLessThan25Percent ? 'rgba(239, 68, 68, 0.04)' : undefined
+                          }}
+                        >
+                          {/* Staff & Department */}
+                          <td>
+                            <div style={{ display: 'flex', flexDirection: 'column' }}>
+                              <strong style={{ fontSize: '0.85rem' }}>{emp.employeeName}</strong>
+                              <div style={{ display: 'flex', gap: '4px', alignItems: 'center', marginTop: '2px' }}>
+                                <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.725rem', color: 'var(--text-muted)' }}>
+                                  {emp.employeeCode}
+                                </span>
+                                <span className="badge badge-gray" style={{ fontSize: '0.65rem' }}>{emp.department}</span>
+                              </div>
+                            </div>
+                          </td>
+
+                          {/* Salary Structure */}
+                          <td>
+                            <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{emp.structureName}</div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              Gross: ₹{Number(emp.monthlyGrossConfigured || emp.grossPay || 0).toLocaleString('en-IN')}
+                            </div>
+                            {emp.validationErrors && emp.validationErrors.length > 0 && (
+                              <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: '2px', fontWeight: 600 }}>
+                                {emp.validationErrors[0]}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Working / Payable Days */}
+                          <td>
+                            <div style={{ fontSize: '0.8rem' }}>
+                              Payable: <strong>{Number(emp.payableDays || 0).toFixed(1)}</strong>
+                            </div>
+                            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                              Cal: {emp.calendarDays || 30} • Pres: {emp.presentDays ?? '-'}
+                            </div>
+                          </td>
+
+                          {/* LOP Days (Editable) */}
+                          <td>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              max={emp.calendarDays || 31}
+                              className="form-control"
+                              style={{
+                                width: '75px',
+                                fontSize: '0.8rem',
+                                padding: '4px 6px',
+                                borderColor: isLopModified ? 'var(--primary)' : undefined,
+                                background: isLopModified ? 'rgba(2, 132, 199, 0.05)' : undefined
+                              }}
+                              value={emp.lopDays ?? 0}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                const next = [...editorEmployees];
+                                next[idx].lopDays = val;
+                                const cal = Number(next[idx].calendarDays || 30);
+                                next[idx].payableDays = Math.max(0, cal - val);
+                                setEditorEmployees(next);
+                              }}
+                            />
+                          </td>
+
+                          {/* Overtime (Hours) (Editable) */}
+                          <td>
+                            <input
+                              type="number"
+                              step="0.5"
+                              min="0"
+                              className="form-control"
+                              style={{
+                                width: '75px',
+                                fontSize: '0.8rem',
+                                padding: '4px 6px',
+                                borderColor: isOtModified ? 'var(--primary)' : undefined,
+                                background: isOtModified ? 'rgba(2, 132, 199, 0.05)' : undefined
+                              }}
+                              value={emp.otHours ?? 0}
+                              onChange={e => {
+                                const next = [...editorEmployees];
+                                next[idx].otHours = Number(e.target.value);
+                                setEditorEmployees(next);
+                              }}
+                            />
+                          </td>
+
+                          {/* Arrears (Editable) */}
+                          <td>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              className="form-control"
+                              style={{
+                                width: '95px',
+                                fontSize: '0.8rem',
+                                padding: '4px 6px',
+                                borderColor: isArrearsModified ? 'var(--primary)' : undefined,
+                                background: isArrearsModified ? 'rgba(2, 132, 199, 0.05)' : undefined
+                              }}
+                              value={emp.arrearsAmount ?? emp.arrears ?? 0}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                const next = [...editorEmployees];
+                                next[idx].arrearsAmount = val;
+                                next[idx].arrears = val;
+                                setEditorEmployees(next);
+                              }}
+                            />
+                          </td>
+
+                          {/* Variable Pay (Editable) */}
+                          <td>
+                            <input
+                              type="number"
+                              step="500"
+                              min="0"
+                              className="form-control"
+                              style={{
+                                width: '95px',
+                                fontSize: '0.8rem',
+                                padding: '4px 6px',
+                                borderColor: isVarModified ? 'var(--primary)' : undefined,
+                                background: isVarModified ? 'rgba(2, 132, 199, 0.05)' : undefined
+                              }}
+                              value={emp.variableAllowance ?? emp.variableEarnings ?? 0}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                const next = [...editorEmployees];
+                                next[idx].variableAllowance = val;
+                                next[idx].variableEarnings = val;
+                                setEditorEmployees(next);
+                              }}
+                            />
+                          </td>
+
+                          {/* Manual Deduction (Editable) */}
+                          <td>
+                            <input
+                              type="number"
+                              step="100"
+                              min="0"
+                              className="form-control"
+                              style={{
+                                width: '95px',
+                                fontSize: '0.8rem',
+                                padding: '4px 6px',
+                                borderColor: isDedModified ? 'var(--danger)' : undefined,
+                                background: isDedModified ? 'rgba(239, 68, 68, 0.05)' : undefined
+                              }}
+                              value={emp.manualDeduction ?? 0}
+                              onChange={e => {
+                                const val = Number(e.target.value);
+                                const next = [...editorEmployees];
+                                next[idx].manualDeduction = val;
+                                setEditorEmployees(next);
+                              }}
+                            />
+                          </td>
+
+                          {/* TDS */}
+                          <td className="money" style={{ fontSize: '0.8rem' }}>
+                            ₹{Number(emp.tdsAdjustment || emp.tds || 0).toLocaleString('en-IN')}
+                          </td>
+
+                          {/* Gross Salary */}
+                          <td className="money" style={{ fontSize: '0.8rem' }}>
+                            ₹{Number(emp.grossPay || 0).toLocaleString('en-IN')}
+                          </td>
+
+                          {/* Deductions */}
+                          <td className="money" style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>
+                            ₹{Number(emp.deductionsPay || 0).toLocaleString('en-IN')}
+                          </td>
+
+                          {/* Net Pay */}
+                          <td className="money" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>
+                            ₹{Number(emp.netPay || 0).toLocaleString('en-IN')}
+                            {emp.isNetLessThan25Percent && (
+                              <div style={{ fontSize: '0.625rem', color: 'var(--danger)', fontWeight: 600 }}>
+                                &lt; 25% Take-Home
+                              </div>
+                            )}
+                          </td>
+
+                          {/* Actions */}
+                          <td style={{ textAlign: 'center' }}>
+                            <div style={{ display: 'flex', gap: '4px', justifyContent: 'center' }}>
+                              <button
+                                className="btn btn-outline btn-xs"
+                                onClick={() => {
+                                  setSelectedCalcRow(emp);
+                                  setShowCalcModal(true);
+                                }}
+                                title="Inspect Pure Decimal Calculation Math"
+                              >
+                                <Eye size={12} /> View Math
+                              </button>
+                              <button
+                                className="btn btn-outline btn-xs"
+                                onClick={() => {
+                                  setSelectedEmployeeForRow(emp);
+                                  setShowAdjustmentModal(true);
+                                }}
+                                title="Open Detailed Salary Adjustment Modal"
+                              >
+                                <Edit3 size={12} /> Adjust
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ========================================================================= */}
-      {/* TAB 2: SALARY REVIEW & EDITOR (Saral Parity)                              */}
-      {/* ========================================================================= */}
-      {activeTab === 'editor' && (
-        <div className="panel" style={{ padding: '20px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700 }}>Salary Review & Input Adjustment Editor</h3>
-              <p style={{ margin: '2px 0 0', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                Adjust LOP days, overtime hours, arrears, and manual deductions prior to executive authorization.
-              </p>
-            </div>
-
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <select
-                className="form-control"
-                value={editorRunId}
-                onChange={e => {
-                  setEditorRunId(e.target.value);
-                  loadEditorData(e.target.value);
-                }}
-                style={{ fontSize: '0.8rem', minWidth: '200px' }}
-              >
-                {runs.map(r => (
-                  <option key={r.id} value={r.id}>
-                    {r.period?.name || r.runNumber} ({r.status})
-                  </option>
-                ))}
-              </select>
-
-              <button
-                className="btn btn-primary btn-sm"
-                onClick={handleSaveAdjustments}
-                disabled={savingAdjustments}
-              >
-                <Save size={13} /> {savingAdjustments ? 'Persisting...' : 'Save Salary Adjustments'}
-              </button>
-            </div>
+            )}
           </div>
-
-          {loadingEditor ? (
-            <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
-              Loading salary adjustments sheet...
-            </div>
-          ) : (
-            <div className="table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Staff Code</th>
-                    <th>Employee Name</th>
-                    <th>LOP Days</th>
-                    <th>Overtime (Hours)</th>
-                    <th>Arrears (₹)</th>
-                    <th>Variable (₹)</th>
-                    <th>Manual Deduction (₹)</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {editorEmployees.map((emp, idx) => (
-                    <tr key={emp.id}>
-                      <td style={{ fontFamily: 'var(--font-mono)' }}>{emp.employeeCode}</td>
-                      <td><strong>{emp.firstName} {emp.lastName}</strong></td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          style={{ width: '80px', fontSize: '0.8rem' }}
-                          value={emp.lopDays ?? 0}
-                          onChange={e => {
-                            const next = [...editorEmployees];
-                            next[idx].lopDays = Number(e.target.value);
-                            setEditorEmployees(next);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          style={{ width: '80px', fontSize: '0.8rem' }}
-                          value={emp.otHours ?? 0}
-                          onChange={e => {
-                            const next = [...editorEmployees];
-                            next[idx].otHours = Number(e.target.value);
-                            setEditorEmployees(next);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          style={{ width: '100px', fontSize: '0.8rem' }}
-                          value={emp.arrears ?? 0}
-                          onChange={e => {
-                            const next = [...editorEmployees];
-                            next[idx].arrears = Number(e.target.value);
-                            setEditorEmployees(next);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          style={{ width: '100px', fontSize: '0.8rem' }}
-                          value={emp.variableAllowance ?? 0}
-                          onChange={e => {
-                            const next = [...editorEmployees];
-                            next[idx].variableAllowance = Number(e.target.value);
-                            setEditorEmployees(next);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          type="number"
-                          className="form-control"
-                          style={{ width: '100px', fontSize: '0.8rem' }}
-                          value={emp.manualDeduction ?? 0}
-                          onChange={e => {
-                            const next = [...editorEmployees];
-                            next[idx].manualDeduction = Number(e.target.value);
-                            setEditorEmployees(next);
-                          }}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* ========================================================================= */}
       {/* TAB 3: INCOME TAX & TDS STUDIO                                           */}
@@ -1153,63 +1880,75 @@ export const PayrollProcessingView: React.FC = () => {
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL: INITIALIZE PAYROLL BATCH (STAGE 1 DRAFT)                           */}
+      {/* MODAL 1: INITIALIZE PAYROLL BATCH (STAGE 1 DRAFT WITH SCOPE PREVIEW)      */}
       {/* ========================================================================= */}
-      {showGenerateModal && (
-        <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setShowGenerateModal(false); }}>
-          <div className="modal-dialog" style={{ maxWidth: '480px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h3 style={{ margin: 0, fontSize: '1.15rem', fontWeight: 700 }}>Initialize Payroll Batch (Stage 1)</h3>
-              <button className="btn-close" onClick={() => setShowGenerateModal(false)}>
-                <X size={16} />
-              </button>
-            </div>
+      <CreatePayrollRunModal
+        isOpen={showGenerateModal}
+        onClose={() => setShowGenerateModal(false)}
+        periods={periods}
+        initialPeriodId={selectedPeriodId}
+        onRunCreated={async (run) => {
+          setActionSuccess(`Batch initialized in Stage 1 (DRAFT) for run ${run?.runNumber || ''}`);
+          await fetchRuns();
+          if (run?.id) viewRunDetails(run.id);
+        }}
+      />
 
-            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              <div className="form-group">
-                <label className="form-label">Select Payroll Period *</label>
-                <select
-                  className="form-control"
-                  value={selectedPeriodId}
-                  onChange={e => setSelectedPeriodId(e.target.value)}
-                  required
-                >
-                  <option value="">Select period...</option>
-                  {periods.map(p => (
-                    <option key={p.id} value={p.id}>
-                      {p.name} (FY {p.year})
-                    </option>
-                  ))}
-                </select>
-              </div>
+      {/* ========================================================================= */}
+      {/* MODAL 2: MANUAL SALARY ADJUSTMENT WORKSPACE                               */}
+      {/* ========================================================================= */}
+      <ManualAdjustmentModal
+        isOpen={showAdjustmentModal}
+        onClose={() => {
+          setShowAdjustmentModal(false);
+          setSelectedEmployeeForRow(null);
+        }}
+        payrollRun={selectedRun}
+        employeeRow={selectedEmployeeForRow}
+        onAdjustmentSaved={async () => {
+          setActionSuccess('Manual adjustment applied and recalculation completed.');
+          await fetchRuns();
+          if (selectedRun?.id) {
+            viewRunDetails(selectedRun.id);
+            fetchReviewTable(selectedRun.id);
+          }
+        }}
+      />
 
-              <div className="form-group">
-                <label className="form-label">Batch Notes</label>
-                <textarea
-                  className="form-control"
-                  rows={2}
-                  placeholder="Optional initialization remarks..."
-                  value={generateRemarks}
-                  onChange={e => setGenerateRemarks(e.target.value)}
-                />
-              </div>
-            </div>
+      {/* ========================================================================= */}
+      {/* MODAL 3: TDS DEFERRAL & RECOVERY WORKSPACE                                */}
+      {/* ========================================================================= */}
+      <TdsDeferralModal
+        isOpen={showTdsModal}
+        onClose={() => {
+          setShowTdsModal(false);
+          setSelectedEmployeeForRow(null);
+        }}
+        payrollRun={selectedRun}
+        employeeRow={selectedEmployeeForRow}
+        periods={periods}
+        onTdsSaved={async () => {
+          setActionSuccess('TDS deferral recorded and recovery scheduled.');
+          await fetchRuns();
+          if (selectedRun?.id) {
+            viewRunDetails(selectedRun.id);
+            fetchReviewTable(selectedRun.id);
+          }
+        }}
+      />
 
-            <div className="modal-footer">
-              <button className="btn btn-outline" onClick={() => setShowGenerateModal(false)}>
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                onClick={handleCreateDraft}
-                disabled={submittingAction || !selectedPeriodId}
-              >
-                {submittingAction ? 'Initializing...' : 'Initialize Stage 1 (DRAFT)'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* ========================================================================= */}
+      {/* MODAL 4: DETAILED SALARY CALCULATION BREAKDOWN                            */}
+      {/* ========================================================================= */}
+      <DetailedCalculationModal
+        isOpen={showCalcModal}
+        onClose={() => {
+          setShowCalcModal(false);
+          setSelectedCalcRow(null);
+        }}
+        payrollRun={selectedRun}
+        row={selectedCalcRow}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL: STAGE 7 RECORD UTR & CONFIRM PAID                                 */}

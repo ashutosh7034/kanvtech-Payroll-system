@@ -4,7 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { PageHeader } from '../components/common/PageHeader';
 import { DataTable, ColumnDef } from '../components/common/DataTable';
 import { StatusBadge } from '../components/common/StatusBadge';
-import { SideDrawer } from '../components/common/SideDrawer';
+import { SalaryHeadModal } from '../components/payroll/SalaryHeadModal';
 import { ConfirmDialog } from '../components/common/ConfirmDialog';
 import { FormulaInspectorDrawer } from '../components/payroll/FormulaInspectorDrawer';
 import {
@@ -75,26 +75,10 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
     isEditingDrawer?: boolean;
   } | null>(null);
 
-  // Create / Edit Drawer State
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  // Create / Edit Modal State
+  const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-
-  // Form State
-  const [formCode, setFormCode] = useState('');
-  const [formName, setFormName] = useState('');
-  const [formType, setFormType] = useState<'EARNING' | 'DEDUCTION' | 'EMPLOYER_STATUTORY'>('EARNING');
-  const [formCalcOnPresentDays, setFormCalcOnPresentDays] = useState(true);
-  const [formCalcMode, setFormCalcMode] = useState<'FIXED_AMOUNT' | 'PERCENTAGE_OF_COMPONENT' | 'FORMULA_EXPRESSION'>('FIXED_AMOUNT');
-  const [formFormula, setFormFormula] = useState('');
-  const [formBaseCode, setFormBaseCode] = useState('BASIC');
-  const [formPercentage, setFormPercentage] = useState<number>(0);
-  const [formFixedAmount, setFormFixedAmount] = useState<number>(0);
-  const [formIsTaxable, setFormIsTaxable] = useState(true);
-  const [formIsPfGross, setFormIsPfGross] = useState(false);
-  const [formIsEsicGross, setFormIsEsicGross] = useState(false);
-  const [formIsPtGross, setFormIsPtGross] = useState(false);
-  const [formDisplayOrder, setFormDisplayOrder] = useState<number>(1);
-  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [appliedFormula, setAppliedFormula] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Confirmation Dialog State
@@ -131,98 +115,22 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
     });
   }, [components, typeFilter, calcModeFilter, statusFilter]);
 
-  const resetForm = () => {
-    setEditingId(null);
-    setFormCode('');
-    setFormName('');
-    setFormType('EARNING');
-    setFormCalcOnPresentDays(true);
-    setFormCalcMode('FIXED_AMOUNT');
-    setFormFormula('');
-    setFormBaseCode('BASIC');
-    setFormPercentage(0);
-    setFormFixedAmount(0);
-    setFormIsTaxable(true);
-    setFormIsPfGross(false);
-    setFormIsEsicGross(false);
-    setFormIsPtGross(false);
-    setFormDisplayOrder(components.length + 1);
-    setFormErrors({});
-  };
-
   const handleOpenCreate = () => {
-    resetForm();
-    setDrawerOpen(true);
+    setEditingId(null);
+    setAppliedFormula(null);
+    setModalOpen(true);
   };
 
   const handleOpenEdit = (item: SalaryComponentItem) => {
     setEditingId(item.id);
-    setFormCode(item.code);
-    setFormName(item.name);
-    setFormType(item.type);
-    setFormCalcOnPresentDays(item.category !== 'VARIABLE');
-    setFormCalcMode(item.calculationMode);
-    setFormFormula(item.formulaExpression || '');
-    setFormBaseCode(item.baseComponentCode || 'BASIC');
-    setFormPercentage(Number(item.percentageValue || 0));
-    setFormFixedAmount(Number(item.fixedAmount || 0));
-    setFormIsTaxable(item.isTaxable);
-    setFormIsPfGross(item.isPfGross);
-    setFormIsEsicGross(item.isEsicGross);
-    setFormIsPtGross(item.isPtGross);
-    setFormDisplayOrder(item.displayOrder || 1);
-    setFormErrors({});
-    setDrawerOpen(true);
+    setAppliedFormula(null);
+    setModalOpen(true);
   };
 
-  const validateForm = () => {
-    const errs: Record<string, string> = {};
-    if (!formCode.trim()) errs.code = 'Component code is required';
-    else if (!/^[A-Z0-9_]+$/.test(formCode.trim().toUpperCase())) {
-      errs.code = 'Code must contain uppercase letters, numbers, and underscores only';
-    } else if (!editingId && components.some(c => c.code.toUpperCase() === formCode.trim().toUpperCase())) {
-      errs.code = `Component code ${formCode.toUpperCase()} already exists`;
-    }
-
-    if (!formName.trim()) errs.name = 'Component display name is required';
-
-    if (formCalcMode === 'FORMULA_EXPRESSION' && !formFormula.trim()) {
-      errs.formula = 'Formula expression is required when column type is Formula';
-    }
-
-    if (formCalcMode === 'PERCENTAGE_OF_COMPONENT') {
-      if (formPercentage <= 0) errs.percentage = 'Percentage must be greater than 0%';
-      if (!formBaseCode.trim()) errs.baseCode = 'Base component reference is required';
-    }
-
-    setFormErrors(errs);
-    return Object.keys(errs).length === 0;
-  };
-
-  const handleSaveComponent = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!validateForm()) return;
-
+  const handleSaveComponent = async (payload: any) => {
     setIsSubmitting(true);
     setErrorMsg(null);
     setSuccessMsg(null);
-
-    const payload = {
-      code: formCode.trim().toUpperCase(),
-      name: formName.trim(),
-      type: formType,
-      category: formCalcOnPresentDays ? 'FIXED_EARNING' : 'VARIABLE',
-      calculationMode: formCalcMode,
-      formulaExpression: formCalcMode === 'FORMULA_EXPRESSION' ? formFormula.trim() : null,
-      baseComponentCode: formCalcMode === 'PERCENTAGE_OF_COMPONENT' ? formBaseCode : null,
-      percentageValue: formCalcMode === 'PERCENTAGE_OF_COMPONENT' ? Number(formPercentage) : null,
-      fixedAmount: formCalcMode === 'FIXED_AMOUNT' ? Number(formFixedAmount) : null,
-      isTaxable: formIsTaxable,
-      isPfGross: formIsPfGross,
-      isEsicGross: formIsEsicGross,
-      isPtGross: formIsPtGross,
-      displayOrder: Number(formDisplayOrder)
-    };
 
     try {
       if (editingId) {
@@ -232,10 +140,14 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
         await api.post('/compensation/components', payload);
         setSuccessMsg(`Salary head ${payload.code} created successfully`);
       }
-      setDrawerOpen(false);
+      setModalOpen(false);
+      setEditingId(null);
+      setAppliedFormula(null);
       await loadComponents();
     } catch (err: any) {
-      setErrorMsg(err.response?.data?.error?.message || err.message || 'Operation failed');
+      const errMsg = err.response?.data?.error?.message || err.message || 'Operation failed';
+      setErrorMsg(errMsg);
+      throw new Error(errMsg);
     } finally {
       setIsSubmitting(false);
     }
@@ -608,295 +520,29 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
         }
       />
 
-      {/* 3. Create / Edit Salary Head SideDrawer */}
-      <SideDrawer
-        isOpen={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        title={editingId ? `Edit Salary Head: ${formCode}` : 'Create New Salary Head'}
-        subtitle="Define component classification, formula rules, and statutory calculation parameters."
-        width="560px"
-        footer={
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '8px', width: '100%' }}>
-            <button
-              type="button"
-              className="btn btn-outline btn-sm"
-              onClick={() => setDrawerOpen(false)}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              className="btn btn-primary btn-sm"
-              disabled={isSubmitting}
-              onClick={handleSaveComponent}
-            >
-              {isSubmitting ? 'Saving...' : editingId ? 'Update Salary Head' : 'Save Salary Head'}
-            </button>
-          </div>
-        }
-      >
-        <form onSubmit={handleSaveComponent} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Code and Name */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                Head Code <span style={{ color: 'var(--danger)' }}>*</span>
-              </label>
-              <input
-                type="text"
-                className="input-field input-sm"
-                placeholder="e.g. HRA"
-                disabled={Boolean(editingId)}
-                value={formCode}
-                onChange={(e) => setFormCode(e.target.value.toUpperCase())}
-                style={{ width: '100%', fontFamily: 'var(--font-mono)', fontWeight: 700 }}
-              />
-              {formErrors.code && <p style={{ fontSize: '0.6875rem', color: 'var(--danger)', marginTop: '2px', marginBottom: 0 }}>{formErrors.code}</p>}
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                Head Display Name <span style={{ color: 'var(--danger)' }}>*</span>
-              </label>
-              <input
-                type="text"
-                className="input-field input-sm"
-                placeholder="e.g. House Rent Allowance"
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                style={{ width: '100%' }}
-              />
-              {formErrors.name && <p style={{ fontSize: '0.6875rem', color: 'var(--danger)', marginTop: '2px', marginBottom: 0 }}>{formErrors.name}</p>}
-            </div>
-          </div>
-
-          {/* Attach As and Column Type */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                Attach As (Classification)
-              </label>
-              <select
-                className="input-field input-sm"
-                value={formType}
-                onChange={(e) => setFormType(e.target.value as any)}
-                style={{ width: '100%' }}
-              >
-                <option value="EARNING">Gross Addition (Earning)</option>
-                <option value="DEDUCTION">Employee Deduction</option>
-                <option value="EMPLOYER_STATUTORY">Employer Contribution</option>
-              </select>
-            </div>
-
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                Column Type
-              </label>
-              <select
-                className="input-field input-sm"
-                value={formCalcMode}
-                onChange={(e) => setFormCalcMode(e.target.value as any)}
-                style={{ width: '100%' }}
-              >
-                <option value="FIXED_AMOUNT">Fixed Amount</option>
-                <option value="PERCENTAGE_OF_COMPONENT">Percentage of Component</option>
-                <option value="FORMULA_EXPRESSION">AST Formula Expression</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Calc On Present Days Toggle */}
-          <div style={{ padding: '10px 12px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <div>
-              <div style={{ fontSize: '0.8125rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                Calculate On Present Days
-              </div>
-              <div style={{ fontSize: '0.6875rem', color: 'var(--text-muted)' }}>
-                When enabled, earnings prorate based on payable days vs working days (attendance & LOP deduction).
-              </div>
-            </div>
-            <label className="switch" style={{ position: 'relative', display: 'inline-block', width: '36px', height: '20px' }}>
-              <input
-                type="checkbox"
-                checked={formCalcOnPresentDays}
-                onChange={(e) => setFormCalcOnPresentDays(e.target.checked)}
-                style={{ opacity: 0, width: 0, height: 0 }}
-              />
-              <span
-                style={{
-                  position: 'absolute',
-                  cursor: 'pointer',
-                  inset: 0,
-                  backgroundColor: formCalcOnPresentDays ? 'var(--primary)' : '#cbd5e1',
-                  borderRadius: '20px',
-                  transition: '0.2s'
-                }}
-              >
-                <span
-                  style={{
-                    position: 'absolute',
-                    height: '14px',
-                    width: '14px',
-                    left: formCalcOnPresentDays ? '18px' : '3px',
-                    bottom: '3px',
-                    backgroundColor: '#ffffff',
-                    borderRadius: '50%',
-                    transition: '0.2s'
-                  }}
-                />
-              </span>
-            </label>
-          </div>
-
-          {/* Conditional Mode Inputs */}
-          {formCalcMode === 'FORMULA_EXPRESSION' && (
-            <div style={{ padding: '12px', background: '#f8fafc', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)' }}>
-                  Formula Expression
-                </label>
-                <button
-                  type="button"
-                  className="btn btn-outline btn-sm"
-                  onClick={() => {
-                    setInspectingComponent({
-                      code: formCode || 'TEMP_CODE',
-                      name: formName || 'New Component',
-                      formula: formFormula,
-                      isEditingDrawer: true
-                    });
-                    setInspectorOpen(true);
-                  }}
-                  style={{ height: '22px', fontSize: '0.6875rem', padding: '0 6px' }}
-                >
-                  <Code size={11} /> Open Full Inspector
-                </button>
-              </div>
-
-              <textarea
-                className="input-field"
-                rows={2}
-                value={formFormula}
-                onChange={(e) => setFormFormula(e.target.value)}
-                placeholder="e.g. BASIC * 0.50"
-                style={{ width: '100%', fontFamily: 'var(--font-mono)', fontSize: '0.75rem' }}
-              />
-              {formErrors.formula && <p style={{ fontSize: '0.6875rem', color: 'var(--danger)', marginTop: '2px', marginBottom: 0 }}>{formErrors.formula}</p>}
-            </div>
-          )}
-
-          {formCalcMode === 'PERCENTAGE_OF_COMPONENT' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', padding: '12px', background: '#f8fafc', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                  Percentage (%)
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  className="input-field input-sm"
-                  value={formPercentage}
-                  onChange={(e) => setFormPercentage(Number(e.target.value))}
-                  style={{ width: '100%', fontVariantNumeric: 'tabular-nums' }}
-                />
-                {formErrors.percentage && <p style={{ fontSize: '0.6875rem', color: 'var(--danger)', marginTop: '2px', marginBottom: 0 }}>{formErrors.percentage}</p>}
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                  Base Component Code
-                </label>
-                <select
-                  className="input-field input-sm"
-                  value={formBaseCode}
-                  onChange={(e) => setFormBaseCode(e.target.value)}
-                  style={{ width: '100%' }}
-                >
-                  {components
-                    .filter(c => !editingId || c.id !== editingId)
-                    .map(c => (
-                      <option key={c.code} value={c.code}>{c.code} - {c.name}</option>
-                    ))}
-                </select>
-                {formErrors.baseCode && <p style={{ fontSize: '0.6875rem', color: 'var(--danger)', marginTop: '2px', marginBottom: 0 }}>{formErrors.baseCode}</p>}
-              </div>
-            </div>
-          )}
-
-          {formCalcMode === 'FIXED_AMOUNT' && (
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-                Default Monthly Amount (₹)
-              </label>
-              <input
-                type="number"
-                className="input-field input-sm"
-                value={formFixedAmount}
-                onChange={(e) => setFormFixedAmount(Number(e.target.value))}
-                style={{ width: '100%', fontVariantNumeric: 'tabular-nums' }}
-              />
-              <span style={{ fontSize: '0.6875rem', color: 'var(--text-dim)' }}>
-                Can be overridden per employee in Salary Structure assignment.
-              </span>
-            </div>
-          )}
-
-          {/* Statutory Flags */}
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '6px' }}>
-              Statutory Basis & Tax Rules
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px' }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formIsTaxable}
-                  onChange={(e) => setFormIsTaxable(e.target.checked)}
-                />
-                <span>Subject to TDS Income Tax</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formIsPfGross}
-                  onChange={(e) => setFormIsPfGross(e.target.checked)}
-                />
-                <span>Included in PF Gross Basis</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formIsEsicGross}
-                  onChange={(e) => setFormIsEsicGross(e.target.checked)}
-                />
-                <span>Included in ESIC Gross Basis</span>
-              </label>
-              <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', cursor: 'pointer' }}>
-                <input
-                  type="checkbox"
-                  checked={formIsPtGross}
-                  onChange={(e) => setFormIsPtGross(e.target.checked)}
-                />
-                <span>Included in PT Gross Basis</span>
-              </label>
-            </div>
-          </div>
-
-          {/* Display Order */}
-          <div>
-            <label style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-main)', display: 'block', marginBottom: '4px' }}>
-              Display Sequence Order
-            </label>
-            <input
-              type="number"
-              className="input-field input-sm"
-              value={formDisplayOrder}
-              onChange={(e) => setFormDisplayOrder(Number(e.target.value))}
-              style={{ width: '120px' }}
-            />
-          </div>
-        </form>
-      </SideDrawer>
+      {/* 3. Create / Edit Salary Head Centered Modal */}
+      <SalaryHeadModal
+        isOpen={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditingId(null);
+          setAppliedFormula(null);
+        }}
+        onSave={handleSaveComponent}
+        editingItem={components.find(c => c.id === editingId) || null}
+        existingComponents={components}
+        isSubmitting={isSubmitting}
+        onOpenFormulaInspector={(code, name, formula) => {
+          setInspectingComponent({
+            code: code || 'TEMP_CODE',
+            name: name || 'Salary Head',
+            formula: formula || '',
+            isEditingDrawer: true
+          });
+          setInspectorOpen(true);
+        }}
+        formulaFromInspector={appliedFormula}
+      />
 
       {/* 4. AST Formula Inspector Drawer */}
       <FormulaInspectorDrawer
@@ -908,7 +554,7 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
         canEdit={Boolean(inspectingComponent?.isEditingDrawer)}
         onApplyFormula={(newFormula) => {
           if (inspectingComponent?.isEditingDrawer) {
-            setFormFormula(newFormula);
+            setAppliedFormula(newFormula);
           }
         }}
       />

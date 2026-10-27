@@ -1,0 +1,77 @@
+name: CI & Deployment Gating
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-and-test:
+    name: Build & Test Validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: root
+          POSTGRES_DB: payroll_management_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Root Dependencies
+        run: npm ci || npm install
+
+      - name: Install Backend Dependencies
+        run: |
+          cd backend
+          npm ci || npm install
+
+      - name: Install Frontend Dependencies
+        run: |
+          cd frontend
+          npm ci || npm install
+
+      - name: Generate Prisma Client
+        run: |
+          cd backend
+          npx prisma generate
+
+      - name: Verify Backend Build
+        run: |
+          cd backend
+          npm run build
+
+      - name: Run Backend Automated Tests
+        env:
+          NODE_ENV: test
+          PORT: 5001
+          JWT_SECRET: supersecretjwtkeyforpayflow2026testingsuite
+          DATABASE_URL: postgresql://postgres:root@localhost:5432/payroll_management_test?schema=public
+          TEST_DATABASE_URL: postgresql://postgres:root@localhost:5432/payroll_management_test?schema=public
+        run: |
+          cd backend
+          npx prisma migrate deploy || npx prisma db push --skip-generate
+          npm test
+
+      - name: Verify Frontend Production Build
+        run: |
+          cd frontend
+          npm run build

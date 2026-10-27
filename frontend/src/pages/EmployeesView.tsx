@@ -1,10 +1,16 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../services/api';
 import { useAuth } from '../contexts/AuthContext';
-import { Search, UserPlus, Eye, X, Building, CreditCard } from 'lucide-react';
-import { EmployeeEnrollmentModal } from '../components/EmployeeEnrollmentModal';
+import { Search, UserPlus, Eye, Pencil } from 'lucide-react';
+import { ManageEmployeeView } from './ManageEmployeeView';
+import { EmployeeProfileModal } from '../components/EmployeeProfileModal';
 
-export const EmployeesView: React.FC = () => {
+export interface EmployeesViewProps {
+  onEnroll?: () => void;
+  onEdit?: (id: string) => void;
+}
+
+export const EmployeesView: React.FC<EmployeesViewProps> = ({ onEnroll, onEdit }) => {
   const { canPerformAction, canViewField } = useAuth();
   const canCreateEmployee = canPerformAction('employee:create');
   const canViewBasicPay = canViewField('field:employee:basic_pay');
@@ -14,16 +20,17 @@ export const EmployeesView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedEmp, setSelectedEmp] = useState<any | null>(null);
-  const [showAddModal, setShowAddModal] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'manage'>('list');
+  const [manageEmpId, setManageEmpId] = useState<string | null>(null);
 
   const fetchEmployees = async () => {
     setLoading(true);
     try {
       const query = search ? `?search=${encodeURIComponent(search)}` : '';
       const res: any = await api.get(`/employees${query}`);
-      setEmployees(res.employees);
+      setEmployees(res.employees || []);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to fetch employees:', err);
     } finally {
       setLoading(false);
     }
@@ -38,9 +45,46 @@ export const EmployeesView: React.FC = () => {
       const res: any = await api.get(`/employees/${id}`);
       setSelectedEmp(res.employee);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to load employee details:', err);
     }
   };
+
+  const handleEnrollClick = () => {
+    if (onEnroll) {
+      onEnroll();
+    } else {
+      setManageEmpId(null);
+      setViewMode('manage');
+    }
+  };
+
+  const handleEditClick = (id: string) => {
+    if (onEdit) {
+      onEdit(id);
+    } else {
+      setManageEmpId(id);
+      setViewMode('manage');
+    }
+  };
+
+  // If internal full-screen manage mode is active
+  if (viewMode === 'manage') {
+    return (
+      <ManageEmployeeView
+        employeeId={manageEmpId}
+        onBack={() => {
+          setManageEmpId(null);
+          setViewMode('list');
+          fetchEmployees();
+        }}
+        onSuccess={() => {
+          setManageEmpId(null);
+          setViewMode('list');
+          fetchEmployees();
+        }}
+      />
+    );
+  }
 
   return (
     <div>
@@ -59,7 +103,7 @@ export const EmployeesView: React.FC = () => {
         </div>
 
         {canCreateEmployee && (
-          <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
+          <button className="btn btn-primary" onClick={handleEnrollClick}>
             <UserPlus size={16} /> Enroll New Employee
           </button>
         )}
@@ -88,8 +132,18 @@ export const EmployeesView: React.FC = () => {
                 <tr><td colSpan={6 + (canViewBasicPay ? 1 : 0) + (canViewBankAccount ? 1 : 0)} style={{ textAlign: 'center', padding: '24px', color: 'var(--text-muted)' }}>No matching employees found.</td></tr>
               ) : (
                 employees.map((emp) => {
-                  const assignment = emp.salaryAssignments?.[0];
-                  const bank = emp.bankAccounts?.[0];
+                  const basicLine = emp.salaryStructure?.lines?.find(
+                    (l: any) => l.component?.code === 'BASIC' || l.component?.name?.toLowerCase().includes('basic')
+                  );
+                  const basicPay = basicLine 
+                    ? Number(basicLine.monthlyAmount) 
+                    : (emp.salaryStructure?.monthlyGross ? Number(emp.salaryStructure.monthlyGross) * 0.5 : 0);
+
+                  const bankName = emp.bankName || emp.bankAccounts?.[0]?.bankName;
+                  const maskedAcc = emp.bankAccountNumber 
+                    ? '••••' + emp.bankAccountNumber.slice(-4) 
+                    : (emp.bankAccounts?.[0]?.maskedAccount || null);
+
                   return (
                     <tr key={emp.id}>
                       <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{emp.employeeCode}</td>
@@ -100,17 +154,17 @@ export const EmployeesView: React.FC = () => {
                       <td>{emp.designation?.name || 'N/A'}</td>
                       <td>
                         <div>{emp.department?.name || 'General'}</div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{emp.branch?.name || emp.ou?.name || 'Corporate HQ'}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{emp.branch?.name || 'Corporate HQ'}</div>
                       </td>
                       {canViewBasicPay && (
                         <td className="money">
-                          ₹{assignment ? Number(assignment.basicPay).toLocaleString('en-IN') : '0'}
+                          {basicPay > 0 ? `₹${basicPay.toLocaleString('en-IN')}` : '₹0'}
                         </td>
                       )}
                       {canViewBankAccount && (
                         <td style={{ fontSize: '0.8rem' }}>
-                          <div>{bank?.bankName || emp.bankName || 'N/A'}</div>
-                          <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{bank?.maskedAccount || (emp.bankAccountNumber ? '••••' + emp.bankAccountNumber.slice(-4) : 'N/A')}</div>
+                          <div>{bankName || 'N/A'}</div>
+                          <div style={{ fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>{maskedAcc || 'N/A'}</div>
                         </td>
                       )}
                       <td>
@@ -119,9 +173,16 @@ export const EmployeesView: React.FC = () => {
                         </span>
                       </td>
                       <td>
-                        <button className="btn btn-secondary btn-sm" onClick={() => viewEmployeeDetails(emp.id)}>
-                          <Eye size={12} /> View
-                        </button>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => viewEmployeeDetails(emp.id)} title="View Complete Employee Profile">
+                            <Eye size={12} /> View
+                          </button>
+                          {canCreateEmployee && (
+                            <button className="btn btn-outline btn-sm" onClick={() => handleEditClick(emp.id)} title="Edit Employee Full Profile">
+                              <Pencil size={12} /> Edit
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -132,83 +193,12 @@ export const EmployeesView: React.FC = () => {
         </div>
       </div>
 
-      {/* Employee Detail Modal */}
+      {/* Redesigned Complete Employee Profile Modal */}
       {selectedEmp && (
-        <div className="modal-overlay" onClick={() => setSelectedEmp(null)}>
-          <div className="modal-content modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div className="user-avatar" style={{ width: '40px', height: '40px', background: 'var(--primary)', color: '#fff', fontSize: '1rem' }}>
-                  {selectedEmp.firstName[0]}{selectedEmp.lastName[0]}
-                </div>
-                <div>
-                  <h3>{selectedEmp.firstName} {selectedEmp.middleName ? `${selectedEmp.middleName} ` : ''}{selectedEmp.lastName}</h3>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{selectedEmp.employeeCode} • {selectedEmp.designation?.name}</p>
-                </div>
-              </div>
-              <button className="btn btn-outline btn-sm" onClick={() => setSelectedEmp(null)}><X size={16} /></button>
-            </div>
-            <div className="modal-body">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '20px' }}>
-                <div style={{ background: 'var(--bg-app)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: 'var(--primary)' }}>
-                    <Building size={16} /> <strong>Organizational Placement</strong>
-                  </div>
-                  <div style={{ fontSize: '0.82rem', lineHeight: '1.8' }}>
-                    <div>Campus/OU: <strong>{selectedEmp.ou?.name}</strong></div>
-                    <div>Department: <strong>{selectedEmp.department?.name}</strong></div>
-                    <div>Cadre: <strong>{selectedEmp.designation?.cadre}</strong></div>
-                    <div>Group: <strong>{selectedEmp.employeeGroup?.name}</strong></div>
-                    <div>Date of Joining: <strong>{new Date(selectedEmp.dateOfJoining).toLocaleDateString('en-IN')}</strong></div>
-                  </div>
-                </div>
-
-                {canViewBankAccount && (
-                  <div style={{ background: 'var(--bg-app)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', color: 'var(--success)' }}>
-                      <CreditCard size={16} /> <strong>Disbursement & Statutory</strong>
-                    </div>
-                    <div style={{ fontSize: '0.82rem', lineHeight: '1.8' }}>
-                      <div>PAN: <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedEmp.maskedPan || selectedEmp.pan || 'N/A'}</strong></div>
-                      <div>Bank: <strong>{selectedEmp.bankAccounts?.[0]?.bankName}</strong></div>
-                      <div>A/C: <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedEmp.bankAccounts?.[0]?.maskedAccount}</strong></div>
-                      <div>IFSC: <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedEmp.bankAccounts?.[0]?.ifscCode}</strong></div>
-                      <div>GPF Account: <strong style={{ fontFamily: 'var(--font-mono)' }}>{selectedEmp.gpfAccount?.accountNumber || 'N/A'}</strong></div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Active Salary Assignment */}
-              {canViewBasicPay && (
-                <div style={{ background: 'var(--bg-app)', padding: '14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', marginBottom: '16px' }}>
-                  <h4 style={{ fontSize: '0.9rem', marginBottom: '8px', color: 'var(--text-main)' }}>Active 7th CPC Salary Assignment</h4>
-                  {selectedEmp.salaryAssignments?.[0] ? (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', fontSize: '0.85rem' }}>
-                      <div>Structure: <br /><strong>{selectedEmp.salaryAssignments[0].structure?.name}</strong></div>
-                      <div>Pay Level: <br /><strong>{selectedEmp.salaryAssignments[0].payLevel?.name || 'N/A'}</strong></div>
-                      <div>Matrix Cell: <br /><strong>Index #{selectedEmp.salaryAssignments[0].payMatrixCell?.indexNumber || '1'}</strong></div>
-                      <div>Basic Pay: <br /><strong style={{ color: 'var(--success)', fontSize: '1.1rem', fontFamily: 'var(--font-mono)' }}>₹{Number(selectedEmp.salaryAssignments[0].basicPay).toLocaleString('en-IN')}</strong></div>
-                    </div>
-                  ) : (
-                    <p style={{ color: 'var(--text-muted)' }}>No active salary assignment found.</p>
-                  )}
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setSelectedEmp(null)}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SpineHR-Style Employee Enrollment Modal */}
-      {canCreateEmployee && (
-        <EmployeeEnrollmentModal
-          isOpen={showAddModal}
-          onClose={() => setShowAddModal(false)}
-          onSuccess={fetchEmployees}
+        <EmployeeProfileModal
+          employee={selectedEmp}
+          onClose={() => setSelectedEmp(null)}
+          onEdit={handleEditClick}
         />
       )}
     </div>

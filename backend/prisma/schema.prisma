@@ -77,10 +77,12 @@ enum LeaveDurationType {
 }
 
 enum RequestStatus {
+  DRAFT
   PENDING
   APPROVED
   REJECTED
   CANCELLED
+  WITHDRAWN
   CORRECTION_REQUESTED
   PAID
 }
@@ -813,19 +815,27 @@ model AttendanceRegularization {
 // ==========================================
 
 model LeavePolicy {
-  id              String          @id @default(uuid())
-  companyId       String
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  code            String
-  name            String
-  annualQuota     Decimal         @db.Decimal(5, 2)
-  isPaid          Boolean         @default(true)
-  maxCarryForward Decimal         @default(0) @db.Decimal(5, 2)
-  encashable      Boolean         @default(false)
-  createdAt       DateTime        @default(now())
+  id                  String          @id @default(uuid())
+  companyId           String
+  company             Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code                String
+  name                String
+  annualQuota         Decimal         @db.Decimal(5, 2)
+  isPaid              Boolean         @default(true)
+  maxCarryForward     Decimal         @default(0) @db.Decimal(5, 2)
+  encashable          Boolean         @default(false)
+  minAdvanceNoticeDays Int            @default(0)
+  maxConsecutiveDays  Int             @default(30)
+  allowHalfDay        Boolean         @default(true)
+  requiresAttachment  Boolean         @default(false)
+  probationAllowed    Boolean         @default(true)
+  applicableGender    String          @default("ALL")
+  accrualFrequency    String          @default("ANNUAL")
+  description         String?
+  createdAt           DateTime        @default(now())
 
-  balances        EmployeeLeaveBalance[]
-  requests        LeaveRequest[]
+  balances            EmployeeLeaveBalance[]
+  requests            LeaveRequest[]
 
   @@unique([companyId, code])
 }
@@ -846,20 +856,26 @@ model EmployeeLeaveBalance {
 }
 
 model LeaveRequest {
-  id              String          @id @default(uuid())
-  employeeId      String
-  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  leavePolicyId   String
-  leavePolicy     LeavePolicy     @relation(fields: [leavePolicyId], references: [id])
-  fromDate        DateTime
-  toDate          DateTime
-  durationType    LeaveDurationType @default(FULL_DAY)
-  totalDays       Decimal         @db.Decimal(4, 2)
-  reason          String
-  status          RequestStatus   @default(PENDING)
-  approvedBy      String?
-  actionedAt      DateTime?
-  createdAt       DateTime        @default(now())
+  id                String            @id @default(uuid())
+  employeeId        String
+  employee          Employee          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leavePolicyId     String
+  leavePolicy       LeavePolicy       @relation(fields: [leavePolicyId], references: [id])
+  applicationNumber String?
+  fromDate          DateTime
+  toDate            DateTime
+  durationType      LeaveDurationType @default(FULL_DAY)
+  halfDayPeriod     String?
+  totalDays         Decimal           @db.Decimal(4, 2)
+  reason            String
+  attachmentUrl     String?
+  isDraft           Boolean           @default(false)
+  status            RequestStatus     @default(PENDING)
+  approvedBy        String?
+  approverComment   String?
+  rejectionReason   String?
+  actionedAt        DateTime?
+  createdAt         DateTime          @default(now())
 }
 
 // ==========================================
@@ -1232,35 +1248,48 @@ model TrainingNomination {
 // ==========================================
 
 model LoanType {
-  id              String          @id @default(uuid())
-  companyId       String
-  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  code            String
-  name            String
-  maxAmount       Decimal         @db.Decimal(18, 2)
-  interestRatePct Decimal         @default(0) @db.Decimal(5, 2)
-  maxTenureMonths Int             @default(12)
+  id                 String          @id @default(uuid())
+  companyId          String
+  company            Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code               String
+  name               String
+  maxAmount          Decimal         @db.Decimal(18, 2)
+  interestRatePct    Decimal         @default(0) @db.Decimal(5, 2)
+  maxTenureMonths    Int             @default(12)
+  interestType       String          @default("INTEREST_FREE")
+  interestMethod     String          @default("FLAT_RATE")
+  minInterestRatePct Decimal         @default(0) @db.Decimal(5, 2)
+  maxInterestRatePct Decimal         @default(36) @db.Decimal(5, 2)
+  allowRateOverride  Boolean         @default(true)
 
-  loans           EmployeeLoan[]
+  loans              EmployeeLoan[]
 
   @@unique([companyId, code])
 }
 
 model EmployeeLoan {
-  id              String          @id @default(uuid())
-  employeeId      String
-  employee        Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
-  loanTypeId      String
-  loanType        LoanType        @relation(fields: [loanTypeId], references: [id])
-  principalAmount Decimal         @db.Decimal(18, 2)
-  monthlyEmi      Decimal         @db.Decimal(18, 2)
-  tenureMonths    Int
-  recoveredAmount Decimal         @default(0) @db.Decimal(18, 2)
-  outstandingAmount Decimal       @db.Decimal(18, 2)
-  status          String          @default("ACTIVE")
-  createdAt       DateTime        @default(now())
+  id                  String          @id @default(uuid())
+  employeeId          String
+  employee            Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  loanTypeId          String
+  loanType            LoanType        @relation(fields: [loanTypeId], references: [id])
+  principalAmount     Decimal         @db.Decimal(18, 2)
+  monthlyEmi          Decimal         @db.Decimal(18, 2)
+  tenureMonths        Int
+  recoveredAmount     Decimal         @default(0) @db.Decimal(18, 2)
+  outstandingAmount   Decimal         @db.Decimal(18, 2)
+  status              String          @default("ACTIVE")
+  interestType        String          @default("INTEREST_FREE")
+  interestRatePct     Decimal         @default(0) @db.Decimal(5, 2)
+  interestMethod      String          @default("FLAT_RATE")
+  totalInterest       Decimal         @default(0) @db.Decimal(18, 2)
+  totalRepayment      Decimal         @default(0) @db.Decimal(18, 2)
+  sanctionOrderNumber String?
+  repaymentFrequency  String          @default("MONTHLY")
+  interestStartDate   DateTime?
+  createdAt           DateTime        @default(now())
 
-  repayments      LoanRepayment[]
+  repayments          LoanRepayment[]
 }
 
 model LoanRepayment {

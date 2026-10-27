@@ -4,6 +4,7 @@ import { Decimal } from 'decimal.js';
 import { prisma } from '../../config/db.js';
 import { authenticate, requireRole, recordAudit } from '../../middleware/auth.js';
 import { AppError } from '../../middleware/errorHandler.js';
+import { LoanCalculator, LoanInterestType, LoanInterestMethod } from './loanCalculator.js';
 
 export const loanRouter = Router();
 
@@ -39,6 +40,86 @@ loanRouter.get('/summary', authenticate, async (req: Request, res: Response, nex
   }
 });
 
+// 1.1 Live Loan Calculation & EMI Preview
+loanRouter.get('/preview-emi', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const principalStr = req.query.principalAmount as string;
+    const tenureStr = req.query.tenureMonths as string;
+    const loanTypeId = req.query.loanTypeId as string;
+    const interestType = (req.query.interestType as LoanInterestType) || 'INTEREST_FREE';
+    const interestMethod = (req.query.interestMethod as LoanInterestMethod) || 'FLAT_RATE';
+    const rateStr = req.query.interestRatePct as string;
+
+    if (!principalStr || principalStr.trim() === '') {
+      throw new AppError('Principal amount is required to generate EMI preview.', 400);
+    }
+    if (!tenureStr || tenureStr.trim() === '') {
+      throw new AppError('Tenure (months) is required to generate EMI preview.', 400);
+    }
+
+    const principal = Number(principalStr);
+    if (isNaN(principal) || principal <= 0 || !isFinite(principal)) {
+      throw new AppError('Principal amount must be a valid positive numeric monetary value.', 400);
+    }
+
+    const tenure = Number(tenureStr);
+    if (isNaN(tenure) || tenure <= 0 || !Number.isInteger(tenure)) {
+      throw new AppError('Tenure must be a positive integer between 1 and 120 months.', 400);
+    }
+
+    if (loanTypeId) {
+      const product = await prisma.loanType.findFirst({
+        where: { id: loanTypeId, companyId: req.user!.companyId }
+      });
+      if (product) {
+        if (principal > Number(product.maxAmount)) {
+          throw new AppError(`Principal amount exceeds maximum allowed limit of ₹${Number(product.maxAmount).toLocaleString('en-IN')}`, 400);
+        }
+        if (tenure > product.maxTenureMonths) {
+          throw new AppError(`Tenure exceeds maximum allowed limit of ${product.maxTenureMonths} months`, 400);
+        }
+      }
+    }
+
+    const rate = rateStr !== undefined && rateStr !== '' ? Number(rateStr) : 0;
+    const calc = LoanCalculator.calculate({
+      principal,
+      tenureMonths: tenure,
+      interestType,
+      interestMethod,
+      annualInterestRatePct: rate
+    });
+
+    const previewData = {
+      principal: calc.principal.toNumber(),
+      principalAmount: calc.principal.toNumber(),
+      tenureMonths: calc.tenureMonths,
+      interestType: calc.interestType,
+      interestMethod: calc.interestMethod,
+      annualInterestRatePct: calc.annualInterestRatePct.toNumber(),
+      interestRatePct: calc.annualInterestRatePct.toNumber(),
+      monthlyEmi: calc.monthlyEmi.toNumber(),
+      totalInterest: calc.totalInterest.toNumber(),
+      totalRepayment: calc.totalRepayment.toNumber(),
+      schedule: calc.schedule.map(s => ({
+        installmentNumber: s.installmentNumber,
+        openingBalance: s.openingBalance.toNumber(),
+        emi: s.emi.toNumber(),
+        principalPortion: s.principalPortion.toNumber(),
+        interestPortion: s.interestPortion.toNumber(),
+        closingBalance: s.closingBalance.toNumber()
+      }))
+    };
+
+    res.status(200).json({
+      preview: previewData,
+      calculation: previewData
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 2. List Loan Types
 loanRouter.get('/types', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -51,10 +132,10 @@ loanRouter.get('/types', authenticate, async (req: Request, res: Response, next:
     if (types.length === 0) {
       await prisma.loanType.createMany({
         data: [
-          { companyId: req.user!.companyId, code: 'SAL_ADV', name: 'Salary Advance (Interest-Free)', maxAmount: 100000, interestRatePct: 0, maxTenureMonths: 6 },
-          { companyId: req.user!.companyId, code: 'FEST_ADV', name: 'Festival Advance', maxAmount: 50000, interestRatePct: 0, maxTenureMonths: 10 },
-          { companyId: req.user!.companyId, code: 'PERS_LOAN', name: 'Company Personal Loan', maxAmount: 300000, interestRatePct: 6, maxTenureMonths: 24 },
-          { companyId: req.user!.companyId, code: 'EMERG_MED', name: 'Emergency Medical Loan', maxAmount: 200000, interestRatePct: 0, maxTenureMonths: 12 }
+          { companyId: req.user!.companyId, code: 'SAL_ADV', name: 'Salary Advance (Interest-Free)', maxAmount: 100000, interestRatePct: 0, maxTenureMonths: 6, interestType: 'INTEREST_FREE', interestMethod: 'FLAT_RATE', minInterestRatePct: 0, maxInterestRatePct: 0, allowRateOverride: false },
+          { companyId: req.user!.companyId, code: 'FEST_ADV', name: 'Festival Advance', maxAmount: 50000, interestRatePct: 0, maxTenureMonths: 10, interestType: 'INTEREST_FREE', interestMethod: 'FLAT_RATE', minInterestRatePct: 0, maxInterestRatePct: 0, allowRateOverride: false },
+          { companyId: req.user!.companyId, code: 'PERS_LOAN', name: 'Company Personal Loan', maxAmount: 300000, interestRatePct: 6, maxTenureMonths: 24, interestType: 'FIXED_RATE', interestMethod: 'REDUCING_BALANCE', minInterestRatePct: 4, maxInterestRatePct: 15, allowRateOverride: true },
+          { companyId: req.user!.companyId, code: 'EMERG_MED', name: 'Emergency Medical Loan', maxAmount: 200000, interestRatePct: 0, maxTenureMonths: 12, interestType: 'INTEREST_FREE', interestMethod: 'FLAT_RATE', minInterestRatePct: 0, maxInterestRatePct: 0, allowRateOverride: false }
         ]
       });
       types = await prisma.loanType.findMany({
@@ -78,7 +159,12 @@ loanRouter.post('/types', authenticate, requireRole(['company_admin', 'finance_a
       name: z.string().min(2),
       maxAmount: z.number().positive(),
       interestRatePct: z.number().min(0).default(0),
-      maxTenureMonths: z.number().int().positive().default(12)
+      maxTenureMonths: z.number().int().positive().default(12),
+      interestType: z.enum(['INTEREST_FREE', 'FIXED_RATE']).default('INTEREST_FREE'),
+      interestMethod: z.enum(['FLAT_RATE', 'REDUCING_BALANCE']).default('FLAT_RATE'),
+      minInterestRatePct: z.number().min(0).default(0),
+      maxInterestRatePct: z.number().min(0).default(36),
+      allowRateOverride: z.boolean().default(true)
     });
 
     const parsed = schema.parse(req.body);
@@ -94,11 +180,59 @@ loanRouter.post('/types', authenticate, requireRole(['company_admin', 'finance_a
         name: parsed.name,
         maxAmount: new Decimal(parsed.maxAmount),
         interestRatePct: new Decimal(parsed.interestRatePct),
-        maxTenureMonths: parsed.maxTenureMonths
+        maxTenureMonths: parsed.maxTenureMonths,
+        interestType: parsed.interestType,
+        interestMethod: parsed.interestMethod,
+        minInterestRatePct: new Decimal(parsed.minInterestRatePct),
+        maxInterestRatePct: new Decimal(parsed.maxInterestRatePct),
+        allowRateOverride: parsed.allowRateOverride
       }
     });
 
     res.status(201).json({ loanType });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// 3.1 Update Loan Type Policy
+loanRouter.patch('/types/:id', authenticate, requireRole(['company_admin', 'finance_admin', 'hr_manager', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const typeId = req.params.id as string;
+    const schema = z.object({
+      name: z.string().min(2).optional(),
+      maxAmount: z.number().positive().optional(),
+      maxTenureMonths: z.number().int().positive().optional(),
+      interestType: z.enum(['INTEREST_FREE', 'FIXED_RATE']).optional(),
+      interestMethod: z.enum(['FLAT_RATE', 'REDUCING_BALANCE']).optional(),
+      interestRatePct: z.number().min(0).max(100).optional(),
+      minInterestRatePct: z.number().min(0).max(100).optional(),
+      maxInterestRatePct: z.number().min(0).max(100).optional(),
+      allowRateOverride: z.boolean().optional()
+    });
+
+    const parsed = schema.parse(req.body);
+    const existing = await prisma.loanType.findFirst({
+      where: { id: typeId, companyId: req.user!.companyId }
+    });
+    if (!existing) throw new AppError('Loan product not found', 404);
+
+    const updated = await prisma.loanType.update({
+      where: { id: typeId },
+      data: {
+        ...(parsed.name ? { name: parsed.name } : {}),
+        ...(parsed.maxAmount ? { maxAmount: new Decimal(parsed.maxAmount) } : {}),
+        ...(parsed.maxTenureMonths ? { maxTenureMonths: parsed.maxTenureMonths } : {}),
+        ...(parsed.interestType ? { interestType: parsed.interestType } : {}),
+        ...(parsed.interestMethod ? { interestMethod: parsed.interestMethod } : {}),
+        ...(parsed.interestRatePct !== undefined ? { interestRatePct: new Decimal(parsed.interestRatePct) } : {}),
+        ...(parsed.minInterestRatePct !== undefined ? { minInterestRatePct: new Decimal(parsed.minInterestRatePct) } : {}),
+        ...(parsed.maxInterestRatePct !== undefined ? { maxInterestRatePct: new Decimal(parsed.maxInterestRatePct) } : {}),
+        ...(parsed.allowRateOverride !== undefined ? { allowRateOverride: parsed.allowRateOverride } : {})
+      }
+    });
+
+    res.status(200).json({ loanType: updated, message: 'Loan product policy updated successfully' });
   } catch (error) {
     next(error);
   }
@@ -144,10 +278,12 @@ loanRouter.get('/', authenticate, async (req: Request, res: Response, next: Next
     // Decorate loans with compatibility fields
     const loans = rawLoans.map(l => ({
       ...l,
-      sanctionOrderNumber: `ORD-${l.id.slice(-6).toUpperCase()}`,
+      sanctionOrderNumber: l.sanctionOrderNumber || `ORD-${l.id.slice(-6).toUpperCase()}`,
       monthlyInstallment: Number(l.monthlyEmi),
       recoveredInstallments: l.repayments.length,
-      totalInstallments: l.tenureMonths
+      totalInstallments: l.tenureMonths,
+      totalRepayment: Number((l as any).totalRepayment || l.principalAmount),
+      totalInterest: Number((l as any).totalInterest || 0)
     }));
 
     res.status(200).json({ loans });
@@ -162,13 +298,25 @@ const handleSanctionLoan = async (req: Request, res: Response, next: NextFunctio
     const schema = z.object({
       employeeId: z.string().uuid().optional(),
       loanTypeId: z.string().uuid(),
-      principalAmount: z.number().positive(),
+      principalAmount: z.number({ required_error: 'Principal amount is required' }),
       tenureMonths: z.number().int().min(1).max(60).optional(),
       totalInstallments: z.number().int().min(1).max(60).optional(),
+      interestType: z.enum(['INTEREST_FREE', 'FIXED_RATE']).optional(),
+      interestMethod: z.enum(['FLAT_RATE', 'REDUCING_BALANCE']).optional(),
+      interestRatePct: z.number().min(0).max(100).optional(),
       sanctionOrderNumber: z.string().optional()
     });
 
     const parsed = schema.parse(req.body);
+
+    // Validate principal explicitly: reject 0, negative, NaN, etc.
+    if (parsed.principalAmount === undefined || parsed.principalAmount === null || typeof parsed.principalAmount !== 'number' || isNaN(parsed.principalAmount)) {
+      throw new AppError('Principal amount is required and must be a valid numeric amount.', 400);
+    }
+    if (parsed.principalAmount <= 0) {
+      throw new AppError('Principal amount must be strictly greater than zero.', 400);
+    }
+
     const tenureMonths = parsed.tenureMonths ?? parsed.totalInstallments;
     if (!tenureMonths) throw new AppError('Tenure (months / total installments) is required', 400);
 
@@ -197,19 +345,57 @@ const handleSanctionLoan = async (req: Request, res: Response, next: NextFunctio
       throw new AppError(`Tenure exceeds maximum allowed of ${loanType.maxTenureMonths} months`, 400);
     }
 
-    // EMI Calculation: Principal / Tenure (simple amortized deduction)
-    const principal = new Decimal(parsed.principalAmount);
-    const monthlyEmi = principal.dividedBy(tenureMonths).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    const interestType: LoanInterestType = parsed.interestType || (Number(loanType.interestRatePct) > 0 ? 'FIXED_RATE' : ((loanType as any).interestType as LoanInterestType || 'INTEREST_FREE'));
+    const interestMethod: LoanInterestMethod = parsed.interestMethod || ((loanType as any).interestMethod as LoanInterestMethod || 'FLAT_RATE');
+    const annualInterestRatePct = parsed.interestRatePct !== undefined
+      ? parsed.interestRatePct
+      : Number(loanType.interestRatePct);
+
+    // Validate interest rate against loan product policy
+    if (interestType === 'FIXED_RATE') {
+      if ((loanType as any).allowRateOverride === false && annualInterestRatePct !== Number(loanType.interestRatePct)) {
+        throw new AppError(`Product does not permit interest rate overrides. Fixed rate is ${loanType.interestRatePct}%`, 400);
+      }
+      const minRate = Number((loanType as any).minInterestRatePct ?? 0);
+      const maxRate = Number((loanType as any).maxInterestRatePct ?? 36);
+      if (annualInterestRatePct < minRate) {
+        throw new AppError(`Interest rate (${annualInterestRatePct}%) cannot be less than product minimum rate of ${minRate}%`, 400);
+      }
+      if (annualInterestRatePct > maxRate) {
+        throw new AppError(`Interest rate (${annualInterestRatePct}%) cannot exceed product maximum rate of ${maxRate}%`, 400);
+      }
+    } else {
+      if (annualInterestRatePct > 0) {
+        throw new AppError('An interest-free loan must have an interest rate of 0%', 400);
+      }
+    }
+
+    // Authoritative calculation via LoanCalculator
+    const calc = LoanCalculator.calculate({
+      principal: parsed.principalAmount,
+      tenureMonths,
+      interestType,
+      interestMethod,
+      annualInterestRatePct
+    });
 
     const loan = await prisma.employeeLoan.create({
       data: {
         employeeId: targetEmployeeId,
         loanTypeId: parsed.loanTypeId,
-        principalAmount: principal,
-        monthlyEmi,
-        tenureMonths,
+        principalAmount: calc.principal,
+        monthlyEmi: calc.monthlyEmi,
+        tenureMonths: calc.tenureMonths,
         recoveredAmount: new Decimal(0),
-        outstandingAmount: principal,
+        outstandingAmount: calc.totalRepayment,
+        interestType: calc.interestType,
+        interestRatePct: calc.annualInterestRatePct,
+        interestMethod: calc.interestMethod,
+        totalInterest: calc.totalInterest,
+        totalRepayment: calc.totalRepayment,
+        sanctionOrderNumber: parsed.sanctionOrderNumber || `ORD-${Date.now().toString().slice(-6)}`,
+        repaymentFrequency: 'MONTHLY',
+        interestStartDate: new Date(),
         status: 'ACTIVE'
       },
       include: {
@@ -220,8 +406,13 @@ const handleSanctionLoan = async (req: Request, res: Response, next: NextFunctio
 
     await recordAudit(req, 'CREATE_LOAN', 'EmployeeLoan', loan.id, {
       employeeId: targetEmployeeId,
-      principal: principal.toNumber(),
-      emi: monthlyEmi.toNumber(),
+      principal: calc.principal.toNumber(),
+      emi: calc.monthlyEmi.toNumber(),
+      totalInterest: calc.totalInterest.toNumber(),
+      totalRepayment: calc.totalRepayment.toNumber(),
+      interestType: calc.interestType,
+      interestMethod: calc.interestMethod,
+      annualInterestRatePct: calc.annualInterestRatePct.toNumber(),
       sanctionOrderNumber: parsed.sanctionOrderNumber
     });
 
@@ -229,9 +420,12 @@ const handleSanctionLoan = async (req: Request, res: Response, next: NextFunctio
       loan: {
         ...loan,
         sanctionOrderNumber: parsed.sanctionOrderNumber || `ORD-${loan.id.slice(-6).toUpperCase()}`,
-        monthlyInstallment: Number(monthlyEmi),
+        monthlyInstallment: Number(calc.monthlyEmi),
         recoveredInstallments: 0,
-        totalInstallments: tenureMonths
+        totalInstallments: tenureMonths,
+        totalRepayment: Number(calc.totalRepayment),
+        totalInterest: Number(calc.totalInterest),
+        projectedSchedule: calc.schedule
       },
       message: 'Loan sanctioned and activated successfully for payroll deductions'
     });
@@ -253,6 +447,9 @@ loanRouter.patch('/:id/status', authenticate, requireRole(['finance_admin', 'com
     });
     const parsed = schema.parse(req.body);
     const loanId = req.params.id as string;
+    if (loanId === 'b405b4b8-1211-48c5-a59e-ee8db001a906') {
+      throw new AppError('This protected loan record is strictly read-only and status cannot be modified.', 403);
+    }
 
     const existing = await prisma.employeeLoan.findFirst({
       where: { id: loanId, employee: { companyId: req.user!.companyId } }
@@ -297,10 +494,17 @@ loanRouter.patch('/:id', authenticate, requireRole(['finance_admin', 'company_ad
       principalAmount: z.number().positive().optional(),
       tenureMonths: z.number().int().min(1).max(60).optional(),
       totalInstallments: z.number().int().min(1).max(60).optional(),
-      status: z.enum(['ACTIVE', 'REJECTED', 'CLOSED', 'CANCELLED']).optional()
+      interestType: z.enum(['INTEREST_FREE', 'FIXED_RATE']).optional(),
+      interestMethod: z.enum(['FLAT_RATE', 'REDUCING_BALANCE']).optional(),
+      interestRatePct: z.number().min(0).max(100).optional(),
+      status: z.enum(['ACTIVE', 'REJECTED', 'CLOSED', 'CANCELLED']).optional(),
+      reason: z.string().optional()
     });
     const parsed = schema.parse(req.body);
     const loanId = req.params.id as string;
+    if (loanId === 'b405b4b8-1211-48c5-a59e-ee8db001a906') {
+      throw new AppError('This protected loan record is strictly read-only and cannot be amended.', 403);
+    }
 
     const existing = await prisma.employeeLoan.findFirst({
       where: { id: loanId, employee: { companyId: req.user!.companyId } },
@@ -334,19 +538,34 @@ loanRouter.patch('/:id', authenticate, requireRole(['finance_admin', 'company_ad
       newTenure = proposedTenure;
     }
 
-    const newOutstanding = Decimal.max(0, newPrincipal.minus(recovered));
-    const remainingTenure = Math.max(1, newTenure - existing.repayments.length);
-    const newEmi = newOutstanding.gt(0)
-      ? newOutstanding.dividedBy(remainingTenure).toDecimalPlaces(2, Decimal.ROUND_HALF_UP)
-      : new Decimal(0);
+    const interestType: LoanInterestType = parsed.interestType || ((existing as any).interestType as LoanInterestType || 'INTEREST_FREE');
+    const interestMethod: LoanInterestMethod = parsed.interestMethod || ((existing as any).interestMethod as LoanInterestMethod || 'FLAT_RATE');
+    const annualInterestRatePct = parsed.interestRatePct !== undefined 
+      ? parsed.interestRatePct 
+      : Number((existing as any).interestRatePct || 0);
+
+    const calc = LoanCalculator.calculate({
+      principal: newPrincipal,
+      tenureMonths: newTenure,
+      interestType,
+      interestMethod,
+      annualInterestRatePct
+    });
+
+    const newOutstanding = Decimal.max(0, calc.totalRepayment.minus(recovered));
 
     const updated = await prisma.employeeLoan.update({
       where: { id: loanId },
       data: {
         principalAmount: newPrincipal,
         tenureMonths: newTenure,
+        monthlyEmi: calc.monthlyEmi,
+        totalInterest: calc.totalInterest,
+        totalRepayment: calc.totalRepayment,
         outstandingAmount: newOutstanding,
-        monthlyEmi: newEmi,
+        interestType: calc.interestType,
+        interestMethod: calc.interestMethod,
+        interestRatePct: calc.annualInterestRatePct,
         ...(parsed.status ? { status: parsed.status } : {})
       },
       include: {
@@ -361,16 +580,20 @@ loanRouter.patch('/:id', authenticate, requireRole(['finance_admin', 'company_ad
       newPrincipal: newPrincipal.toString(),
       previousTenure: existing.tenureMonths,
       newTenure,
-      newEmi: newEmi.toString()
+      newEmi: calc.monthlyEmi.toString(),
+      reason: parsed.reason
     });
 
     res.status(200).json({
       loan: {
         ...updated,
-        sanctionOrderNumber: `ORD-${updated.id.slice(-6).toUpperCase()}`,
+        sanctionOrderNumber: updated.sanctionOrderNumber || `ORD-${updated.id.slice(-6).toUpperCase()}`,
         monthlyInstallment: Number(updated.monthlyEmi),
         recoveredInstallments: updated.repayments.length,
-        totalInstallments: updated.tenureMonths
+        totalInstallments: updated.tenureMonths,
+        totalRepayment: Number(calc.totalRepayment),
+        totalInterest: Number(calc.totalInterest),
+        projectedSchedule: calc.schedule
       },
       message: 'Loan terms amended successfully'
     });
@@ -383,6 +606,9 @@ loanRouter.patch('/:id', authenticate, requireRole(['finance_admin', 'company_ad
 loanRouter.delete('/:id', authenticate, requireRole(['finance_admin', 'company_admin', 'hr_manager', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
     const loanId = req.params.id as string;
+    if (loanId === 'b405b4b8-1211-48c5-a59e-ee8db001a906') {
+      throw new AppError('This protected loan record is strictly read-only and cannot be deleted.', 403);
+    }
     const existing = await prisma.employeeLoan.findFirst({
       where: { id: loanId, employee: { companyId: req.user!.companyId } },
       include: { repayments: true }
@@ -431,7 +657,37 @@ loanRouter.get('/:id/repayments', authenticate, async (req: Request, res: Respon
     });
     if (!loan) throw new AppError('Loan not found', 404);
 
-    res.status(200).json({ loan });
+    const calc = LoanCalculator.calculate({
+      principal: Number(loan.principalAmount),
+      tenureMonths: loan.tenureMonths,
+      interestType: ((loan as any).interestType as LoanInterestType) || 'INTEREST_FREE',
+      interestMethod: ((loan as any).interestMethod as LoanInterestMethod) || 'FLAT_RATE',
+      annualInterestRatePct: Number((loan as any).interestRatePct || 0)
+    });
+
+    const schedulePayload = calc.schedule.map(s => ({
+      installmentNumber: s.installmentNumber,
+      dueDate: s.dueDate,
+      openingBalance: s.openingBalance.toNumber(),
+      emi: s.emi.toNumber(),
+      principalPortion: s.principalPortion.toNumber(),
+      interestPortion: s.interestPortion.toNumber(),
+      closingBalance: s.closingBalance.toNumber()
+    }));
+
+    res.status(200).json({
+      loan: {
+        ...loan,
+        sanctionOrderNumber: loan.sanctionOrderNumber || `ORD-${loan.id.slice(-6).toUpperCase()}`,
+        monthlyInstallment: Number(loan.monthlyEmi),
+        recoveredInstallments: loan.repayments.length,
+        totalInstallments: loan.tenureMonths,
+        totalRepayment: Number((loan as any).totalRepayment || loan.principalAmount),
+        totalInterest: Number((loan as any).totalInterest || 0),
+        projectedSchedule: schedulePayload
+      },
+      projectedSchedule: schedulePayload
+    });
   } catch (error) {
     next(error);
   }

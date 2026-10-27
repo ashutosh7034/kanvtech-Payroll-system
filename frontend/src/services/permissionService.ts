@@ -333,7 +333,9 @@ export const MODULE_PERMISSION_MAP: Record<string, PermissionKey> = {
   expenses: 'module:expenses',
   'assets-helpdesk': 'module:assets_helpdesk',
   reports: 'module:reports',
-  self: 'module:self_service'
+  self: 'module:self_service',
+  'my-leave': 'module:self_service',
+  'my-payslips': 'module:self_service'
 };
 
 /**

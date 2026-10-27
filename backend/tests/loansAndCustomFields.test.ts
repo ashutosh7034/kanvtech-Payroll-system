@@ -47,7 +47,8 @@ describe('Module H & Module B: Loans & Advances, Column Manager, Bulk Import Ver
       expect(res.status).toBe(200);
       expect(Array.isArray(res.body.types)).toBe(true);
       expect(res.body.types.length).toBeGreaterThan(0);
-      testLoanTypeId = res.body.types[0].id;
+      const matchingType = res.body.types.find((t: any) => Number(t.maxAmount) >= 60000 && Number(t.interestRatePct ?? 0) === 0);
+      testLoanTypeId = matchingType ? matchingType.id : res.body.types[0].id;
     });
 
     it('creates a new company loan type with interest and tenure rules', async () => {

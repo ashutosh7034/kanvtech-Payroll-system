@@ -19,6 +19,9 @@ import { SelfServiceView } from './pages/SelfServiceView';
 import { LoansView } from './pages/LoansView';
 import { SalaryColumnMasterView } from './pages/SalaryColumnMasterView';
 import { PayrollPermissionsView } from './pages/PayrollPermissionsView';
+import { ManageEmployeeView } from './pages/ManageEmployeeView';
+import { MyLeaveView } from './pages/MyLeaveView';
+import { MyPayslipsView } from './pages/MyPayslipsView';
 import { NotificationBell } from './components/NotificationBell';
 import { AccessDeniedView } from './components/common/AccessDeniedView';
 
@@ -42,12 +45,14 @@ import {
   Landmark,
   Layers,
   ChevronDown,
-  User
+  User,
+  FileText
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
   const { user, token, isLoading, logout, login, canViewModule } = useAuth();
   const [currentPage, setCurrentPage] = useState<string>('dashboard');
+  const [manageEmployeeId, setManageEmployeeId] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
 
   if (isLoading) {
@@ -80,6 +85,8 @@ const AppContent: React.FC = () => {
         return { section: 'Overview', page: 'Executive Dashboard' };
       case 'employees':
         return { section: 'People', page: 'Employee Directory & Master' };
+      case 'manage-employee':
+        return { section: 'HRIS / Employee', page: manageEmployeeId ? 'Edit Employee' : 'Manage Employee' };
       case 'recruitment':
         return { section: 'People', page: 'Recruitment & Candidate Pipeline' };
       case 'offboarding':
@@ -104,6 +111,10 @@ const AppContent: React.FC = () => {
         return { section: 'Operations & Finance', page: 'Employee Loans & Salary Advances' };
       case 'self':
         return { section: 'Employee Portal', page: 'My Self-Service (ESS)' };
+      case 'my-leave':
+        return { section: 'Employee Portal', page: 'My Leave' };
+      case 'my-payslips':
+        return { section: 'Employee Portal', page: 'My Payslips' };
       case 'payroll-permissions':
         return { section: 'Access Control', page: 'Payroll Permissions Dashboard' };
       default:
@@ -146,7 +157,7 @@ const AppContent: React.FC = () => {
                 title: 'Time & Attendance',
                 items: [
                   { id: 'attendance', label: 'Shifts & Attendance', icon: Clock, permissionKey: 'attendance', hideForSelfServiceOnly: true },
-                  { id: 'leave', label: 'Leave Management', icon: CalendarCheck, permissionKey: 'leave', hideForSelfServiceOnly: true }
+                  { id: 'leave', label: 'Team Leave & Approvals', icon: CalendarCheck, permissionKey: 'leave', hideForSelfServiceOnly: true }
                 ]
               },
               {
@@ -175,7 +186,9 @@ const AppContent: React.FC = () => {
                 title: 'Self-Service',
                 items: [
                   { id: 'self', label: 'My Self-Service (ESS)', icon: UserCheck, permissionKey: 'self' },
-                  { id: 'expenses', label: 'My Claims & Expenses', icon: Receipt, permissionKey: 'expenses' }
+                  { id: 'my-leave', label: 'My Leave', icon: CalendarCheck, permissionKey: 'my-leave' },
+                  { id: 'expenses', label: 'My Claims & Expenses', icon: Receipt, permissionKey: 'expenses' },
+                  { id: 'my-payslips', label: 'My Payslips', icon: FileText, permissionKey: 'my-payslips' }
                 ]
               },
               {
@@ -381,16 +394,28 @@ const AppContent: React.FC = () => {
 
         {/* Dynamic Page Content with Route Guard */}
         <main className="content-body">
-          {!canViewModule(currentPage) ? (
+          {(!canViewModule(currentPage === 'manage-employee' ? 'employees' : currentPage)) ? (
             <AccessDeniedView
               moduleName={breadcrumb.page}
-              requiredPermission={`module:${currentPage}`}
+              requiredPermission={`module:${currentPage === 'manage-employee' ? 'employees' : currentPage}`}
               onNavigate={(page) => setCurrentPage(page)}
             />
           ) : (
             <>
               {currentPage === 'dashboard' && <DashboardView onNavigate={setCurrentPage} />}
-              {currentPage === 'employees' && <EmployeesView />}
+              {currentPage === 'employees' && (
+                <EmployeesView 
+                  onEnroll={() => { setManageEmployeeId(null); setCurrentPage('manage-employee'); }} 
+                  onEdit={(id) => { setManageEmployeeId(id); setCurrentPage('manage-employee'); }} 
+                />
+              )}
+              {currentPage === 'manage-employee' && (
+                <ManageEmployeeView 
+                  employeeId={manageEmployeeId}
+                  onBack={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
+                  onSuccess={() => { setManageEmployeeId(null); setCurrentPage('employees'); }}
+                />
+              )}
               {currentPage === 'recruitment' && <RecruitmentView />}
               {currentPage === 'offboarding' && <OffboardingView />}
               {currentPage === 'attendance' && <AttendanceView />}
@@ -403,6 +428,8 @@ const AppContent: React.FC = () => {
               {currentPage === 'assets-helpdesk' && <AssetsHelpDeskView />}
               {currentPage === 'reports' && <ReportsView />}
               {currentPage === 'self' && <SelfServiceView onNavigate={setCurrentPage} />}
+              {currentPage === 'my-leave' && <MyLeaveView />}
+              {currentPage === 'my-payslips' && <MyPayslipsView />}
               {currentPage === 'payroll-permissions' && <PayrollPermissionsView />}
             </>
           )}

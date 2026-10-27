@@ -132,7 +132,7 @@ describe('Saral PayPack Feature Parity Test Suite', () => {
 
     it('ports computed TDS to active payroll run slips', async () => {
       let run = await prisma.corporatePayrollRun.findFirst({
-        where: { companyId: testCompanyId, status: { not: 'PAID' } },
+        where: { companyId: testCompanyId, status: { notIn: ['APPROVED', 'PAID'] } },
         include: { slips: true }
       });
 
@@ -176,7 +176,7 @@ describe('Saral PayPack Feature Parity Test Suite', () => {
     it('retrieves salary editor grid with isNetLessThan25Percent compliance flag', async () => {
       if (!testRunId) {
         const run = await prisma.corporatePayrollRun.findFirst({
-          where: { companyId: testCompanyId },
+          where: { companyId: testCompanyId, status: { notIn: ['APPROVED', 'PAID'] } },
           include: { slips: true }
         });
         if (run) {
