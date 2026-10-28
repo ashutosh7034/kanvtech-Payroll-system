@@ -249,6 +249,659 @@ corporatePayrollRouter.get('/runs/preview-eligible', authenticate, async (req: R
   }
 });
 
+// ==========================================
+// 1.3b DEPARTMENT PAYROLL PROCESS WORKSPACE (PHASE B, C, D, E)
+// ==========================================
+corporatePayrollRouter.get('/department/workspace', authenticate, requireRole(['company_admin', 'payroll_admin', 'payroll_processor', 'finance_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const {
+      periodId,
+      departmentId,
+      employeeId,
+      status: employmentStatus,
+      eligibility,
+      processingStatus,
+      search
+    } = req.query;
+
+    if (!periodId) {
+      throw new AppError('Payroll periodId is required', 400);
+    }
+
+    const companyId = req.user!.companyId;
+
+    // 1. Fetch Payroll Period
+    const period = await prisma.payrollPeriod.findFirst({
+      where: { id: String(periodId), companyId }
+    });
+    if (!period) {
+      throw new AppError('Payroll period not found for this organization', 404);
+    }
+
+    // 2. Fetch Department details if provided
+    let department: any = null;
+    if (departmentId && departmentId !== 'ALL') {
+      department = await prisma.department.findFirst({
+        where: { id: String(departmentId), companyId }
+      });
+      if (!department) {
+        throw new AppError('Selected department not found or unauthorized', 404);
+      }
+    }
+
+    // 3. Find active or existing CorporatePayrollRun for this period & department
+    const runsForPeriod = await prisma.corporatePayrollRun.findMany({
+      where: { companyId, periodId: period.id },
+      include: {
+        period: true,
+        transitions: { orderBy: { timestamp: 'desc' }, take: 10 },
+        slips: {
+          include: {
+            items: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const activeRun = runsForPeriod.find(r => {
+      if (!departmentId || departmentId === 'ALL') return true;
+      const scope = (r.validationNotes as any)?.scope;
+      return scope?.type === 'DEPARTMENT' && scope?.departmentId === String(departmentId);
+    }) || runsForPeriod[0] || null;
+
+    // Map slips by employeeId
+    const slipMap = new Map<string, any>();
+    if (activeRun && activeRun.slips) {
+      for (const slip of activeRun.slips) {
+        slipMap.set(slip.employeeId, slip);
+      }
+    }
+
+    // Also find any locked/paid slips in other runs for duplicate prevention
+    const otherRunsSlips = await prisma.corporatePayrollSlip.findMany({
+      where: {
+        payrollRun: {
+          companyId,
+          periodId: period.id,
+          id: activeRun ? { not: activeRun.id } : undefined,
+          status: { in: ['APPROVED', 'PAYMENT_READY', 'PAID'] }
+        }
+      },
+      include: {
+        payrollRun: { select: { id: true, runNumber: true, status: true } }
+      }
+    });
+    const finalizedInOtherRunMap = new Map<string, any>();
+    for (const s of otherRunsSlips) {
+      finalizedInOtherRunMap.set(s.employeeId, s.payrollRun);
+    }
+
+    // 4. Fetch Employees in scope
+    const employeeWhere: any = {
+      companyId
+    };
+
+    if (departmentId && departmentId !== 'ALL') {
+      employeeWhere.departmentId = String(departmentId);
+    }
+    if (employeeId && String(employeeId) !== 'ALL') {
+      employeeWhere.id = String(employeeId);
+    }
+    if (employmentStatus && employmentStatus !== 'ALL') {
+      employeeWhere.status = String(employmentStatus);
+    }
+    if (search && String(search).trim()) {
+      const q = String(search).trim();
+      employeeWhere.OR = [
+        { employeeCode: { contains: q, mode: 'insensitive' } },
+        { firstName: { contains: q, mode: 'insensitive' } },
+        { lastName: { contains: q, mode: 'insensitive' } }
+      ];
+    }
+
+    const [employees, ptSlabs, statutoryConfig, departmentsList] = await Promise.all([
+      prisma.employee.findMany({
+        where: employeeWhere,
+        include: {
+          department: true,
+          designation: true,
+          branch: true,
+          salaryStructure: {
+            include: {
+              template: { select: { name: true } },
+              lines: {
+                include: { component: true },
+                orderBy: { component: { displayOrder: 'asc' } }
+              }
+            }
+          },
+          payrollPolicy: true,
+          loans: {
+            where: { status: 'ACTIVE' },
+            include: { loanType: true }
+          }
+        },
+        orderBy: { employeeCode: 'asc' }
+      }),
+      prisma.professionalTaxSlab.findMany(),
+      prisma.statutoryConfig.findUnique({ where: { companyId } }),
+      prisma.department.findMany({ where: { companyId }, select: { id: true, name: true, code: true } })
+    ]);
+
+    // 5. Evaluate Eligibility & Calculate Preview
+    const evaluatedRows: any[] = [];
+
+    for (const emp of employees) {
+      const ineligibilityReasons: string[] = [];
+      const validStatuses = ['ACTIVE', 'CONFIRMED', 'PROBATION'];
+
+      // Check Employment Status
+      if (!validStatuses.includes(emp.status)) {
+        ineligibilityReasons.push(`Employee status is ${emp.status} (only ACTIVE, CONFIRMED, or PROBATION employees are eligible)`);
+      }
+
+      // Check Date of Joining
+      if (new Date(emp.dateOfJoining) > new Date(period.endDate)) {
+        ineligibilityReasons.push(`Date of joining (${new Date(emp.dateOfJoining).toISOString().split('T')[0]}) is after period end date (${new Date(period.endDate).toISOString().split('T')[0]})`);
+      }
+
+      // Check Exit Date
+      if (emp.exitDate && new Date(emp.exitDate) < new Date(period.startDate)) {
+        ineligibilityReasons.push(`Employee exited on ${new Date(emp.exitDate).toISOString().split('T')[0]} prior to pay period start`);
+      }
+
+      // Check Salary Structure
+      const hasStructure = Boolean(emp.salaryStructure && emp.salaryStructure.lines && emp.salaryStructure.lines.length > 0);
+      if (!hasStructure) {
+        ineligibilityReasons.push('Missing active salary structure (CTC components not configured)');
+      } else {
+        if (new Date(emp.salaryStructure!.effectiveFrom) > new Date(period.endDate)) {
+          ineligibilityReasons.push(`Salary structure effective date (${new Date(emp.salaryStructure!.effectiveFrom).toISOString().split('T')[0]}) is after period end date`);
+        }
+        if (emp.salaryStructure!.effectiveTo && new Date(emp.salaryStructure!.effectiveTo) < new Date(period.startDate)) {
+          ineligibilityReasons.push(`Salary structure expired on ${new Date(emp.salaryStructure!.effectiveTo).toISOString().split('T')[0]}`);
+        }
+      }
+
+      // Check Prior Finalized Runs (Duplicate Prevention)
+      const priorRun = finalizedInOtherRunMap.get(emp.id);
+      if (priorRun) {
+        ineligibilityReasons.push(`Already finalized in locked payroll run ${priorRun.runNumber} (${priorRun.status})`);
+      }
+
+      // Evaluate Attendance & Loss of Pay
+      let att: any = {
+        calendarDays: 30,
+        workingDays: 30,
+        payableDays: new Decimal(30),
+        lopDays: new Decimal(0),
+        notes: [] as string[]
+      };
+
+      try {
+        att = await PayrollCalculationEngine.evaluateAttendance(emp, period);
+      } catch (attErr) {
+        console.warn(`Attendance evaluation fallback for ${emp.employeeCode}:`, attErr);
+      }
+
+      if (new Decimal(att.payableDays).isZero()) {
+        ineligibilityReasons.push(`Zero payable days in period (${att.lopDays.toString()} LOP days recorded)`);
+      }
+
+      const isEligible = ineligibilityReasons.length === 0;
+
+      // Calculation values
+      const existingSlip = slipMap.get(emp.id);
+      let gross = 0;
+      let deductions = 0;
+      let netPay = 0;
+      let employerCost = 0;
+      let items: any[] = [];
+      let payableDays = att.payableDays.toNumber();
+      let lopDays = att.lopDays.toNumber();
+      let processingStatusVal = 'PENDING';
+
+      if (existingSlip) {
+        gross = Number(existingSlip.grossPay);
+        deductions = Number(existingSlip.deductionsPay);
+        netPay = Number(existingSlip.netPay);
+        employerCost = Number(existingSlip.employerCost);
+        payableDays = Number(existingSlip.payableDays);
+        lopDays = Number(existingSlip.lopDays);
+        processingStatusVal = 'PROCESSED';
+        items = (existingSlip.items || []).map((it: any) => ({
+          code: it.code,
+          name: it.name,
+          type: it.type,
+          amount: Number(it.amount)
+        }));
+      } else if (hasStructure) {
+        try {
+          const calc = await PayrollCalculationEngine.calculateEmployee(
+            emp,
+            period,
+            ptSlabs,
+            statutoryConfig
+          );
+          gross = calc.grossPay.toNumber();
+          deductions = calc.deductionsPay.toNumber();
+          netPay = calc.netPay.toNumber();
+          employerCost = calc.employerCost.toNumber();
+          payableDays = calc.attendance.payableDays.toNumber();
+          lopDays = calc.attendance.lopDays.toNumber();
+          items = calc.items.map(it => ({
+            code: it.code,
+            name: it.name,
+            type: it.type,
+            amount: it.calculatedAmount.toNumber(),
+            ruleApplied: it.ruleApplied
+          }));
+          processingStatusVal = isEligible ? 'PENDING' : 'INELIGIBLE';
+          if (calc.netPay.isNegative()) {
+            processingStatusVal = 'FAILED';
+          }
+        } catch (calcErr: any) {
+          processingStatusVal = 'FAILED';
+          ineligibilityReasons.push(`Calculation error: ${calcErr?.message || 'Unable to compute pay lines'}`);
+        }
+      } else {
+        gross = 0;
+        deductions = 0;
+        netPay = 0;
+        employerCost = 0;
+        items = [];
+        processingStatusVal = 'INELIGIBLE';
+      }
+
+      // Check filtering criteria
+      if (eligibility && eligibility !== 'ALL') {
+        if (eligibility === 'ELIGIBLE' && !isEligible) continue;
+        if (eligibility === 'INELIGIBLE' && isEligible) continue;
+      }
+      if (processingStatus && processingStatus !== 'ALL') {
+        if (processingStatus !== processingStatusVal) continue;
+      }
+
+      const structName = emp.salaryStructure?.template?.name ||
+        (hasStructure ? `CTC ₹${Number(emp.salaryStructure!.monthlyGross).toLocaleString('en-IN')}/mo` : 'No Structure');
+
+      evaluatedRows.push({
+        id: emp.id,
+        employeeId: emp.id,
+        employeeCode: emp.employeeCode,
+        employeeName: `${emp.firstName} ${emp.lastName}`.trim(),
+        department: emp.department?.name || 'General',
+        departmentId: emp.departmentId,
+        designation: emp.designation?.name || 'Staff',
+        status: emp.status,
+        employmentStatus: emp.status,
+        isEligible,
+        payrollEligibility: isEligible ? 'ELIGIBLE' : 'INELIGIBLE',
+        ineligibilityReasons,
+        salaryStructure: structName,
+        monthlyGrossConfigured: emp.salaryStructure?.monthlyGross ? Number(emp.salaryStructure.monthlyGross) : 0,
+        annualCtc: emp.salaryStructure?.annualCtc ? Number(emp.salaryStructure.annualCtc) : 0,
+        payableDays,
+        lopDays,
+        calendarDays: Number(att.calendarDays),
+        earnings: gross,
+        grossEarnings: gross,
+        deductions,
+        totalDeductions: deductions,
+        netPay,
+        employerCost,
+        processingStatus: processingStatusVal,
+        items,
+        slipId: existingSlip?.id || null
+      });
+    }
+
+    // 6. Compute Aggregated Summary Cards
+    const totalEmployees = evaluatedRows.length;
+    const eligibleCount = evaluatedRows.filter(r => r.isEligible).length;
+    const ineligibleCount = evaluatedRows.filter(r => !r.isEligible).length;
+    const processedCount = evaluatedRows.filter(r => r.processingStatus === 'PROCESSED').length;
+    const pendingCount = evaluatedRows.filter(r => r.processingStatus === 'PENDING').length;
+    const failedCount = evaluatedRows.filter(r => r.processingStatus === 'FAILED').length;
+
+    let totalGross = new Decimal(0);
+    let totalDeductions = new Decimal(0);
+    let totalNetPay = new Decimal(0);
+    let totalEmployerCost = new Decimal(0);
+
+    for (const row of evaluatedRows) {
+      if (row.isEligible || row.processingStatus === 'PROCESSED') {
+        totalGross = totalGross.plus(row.earnings || 0);
+        totalDeductions = totalDeductions.plus(row.deductions || 0);
+        totalNetPay = totalNetPay.plus(row.netPay || 0);
+        totalEmployerCost = totalEmployerCost.plus(row.employerCost || 0);
+      }
+    }
+
+    res.status(200).json({
+      period,
+      department,
+      departments: departmentsList,
+      activeRun,
+      summary: {
+        totalEmployees,
+        eligibleCount,
+        ineligibleCount,
+        processedCount,
+        pendingCount,
+        failedCount,
+        totalGross: totalGross.toNumber(),
+        totalDeductions: totalDeductions.toNumber(),
+        totalNetPay: totalNetPay.toNumber(),
+        totalEmployerCost: totalEmployerCost.toNumber()
+      },
+      employees: evaluatedRows
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// ==========================================
+// 1.3c PROCESS DEPARTMENT PAYROLL BATCH (PHASE E, F)
+// ==========================================
+corporatePayrollRouter.post('/department/process', authenticate, requireRole(['company_admin', 'payroll_admin', 'payroll_processor']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const schema = z.object({
+      periodId: z.string().uuid(),
+      departmentId: z.string().uuid(),
+      selectedEmployeeIds: z.array(z.string().uuid()).optional(),
+      remarks: z.string().optional()
+    });
+
+    const parsed = schema.parse(req.body);
+    const companyId = req.user!.companyId;
+
+    // 1. Validate Period
+    const period = await prisma.payrollPeriod.findFirst({
+      where: { id: parsed.periodId, companyId }
+    });
+    if (!period) throw new AppError('Payroll period not found for this organization', 404);
+    if (period.isLocked) throw new AppError('Payroll period is locked and cannot be processed', 400);
+
+    // 2. Validate Department
+    const department = await prisma.department.findFirst({
+      where: { id: parsed.departmentId, companyId }
+    });
+    if (!department) throw new AppError('Department not found or belongs to another organization', 404);
+
+    // 3. Check for existing runs to enforce duplicate prevention and idempotency
+    const existingRuns = await prisma.corporatePayrollRun.findMany({
+      where: { companyId, periodId: period.id },
+      include: { slips: true }
+    });
+
+    const deptRun = existingRuns.find(r => {
+      const scope = (r.validationNotes as any)?.scope;
+      return scope?.type === 'DEPARTMENT' && scope?.departmentId === department.id;
+    });
+
+    if (deptRun) {
+      if (deptRun.status === 'PAID') {
+        throw new AppError(`Department payroll for ${department.name} in ${period.name} is already PAID and locked.`, 400);
+      }
+      if (deptRun.status === 'APPROVED') {
+        throw new AppError(`Department payroll for ${department.name} is already APPROVED. Reopening requires authorized recalculation.`, 400);
+      }
+    }
+
+    // 4. Query employees in target department
+    const employeeWhere: any = {
+      companyId,
+      departmentId: department.id,
+      status: { in: ['ACTIVE', 'CONFIRMED', 'PROBATION'] },
+      dateOfJoining: { lte: period.endDate },
+      OR: [
+        { exitDate: null },
+        { exitDate: { gte: period.startDate } }
+      ]
+    };
+
+    if (parsed.selectedEmployeeIds && parsed.selectedEmployeeIds.length > 0) {
+      employeeWhere.id = { in: parsed.selectedEmployeeIds };
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: employeeWhere,
+      include: {
+        salaryStructure: {
+          include: {
+            lines: {
+              include: { component: true },
+              orderBy: { component: { displayOrder: 'asc' } }
+            }
+          }
+        },
+        payrollPolicy: true,
+        branch: true,
+        department: true,
+        designation: true,
+        loans: {
+          where: { status: 'ACTIVE' },
+          include: { loanType: true }
+        }
+      },
+      orderBy: { employeeCode: 'asc' }
+    });
+
+    // Filter to eligible candidates with active structures
+    const eligibleEmployees = employees.filter(e => Boolean(e.salaryStructure && e.salaryStructure.lines && e.salaryStructure.lines.length > 0));
+    if (eligibleEmployees.length === 0) {
+      throw new AppError(`No eligible employees with active salary structures found in department ${department.name}.`, 400);
+    }
+
+    // 5. Fetch statutory and PT configurations
+    const [statutoryConfig, ptSlabs] = await Promise.all([
+      prisma.statutoryConfig.findUnique({ where: { companyId } }),
+      prisma.professionalTaxSlab.findMany()
+    ]);
+
+    // 6. Create or reuse CorporatePayrollRun
+    let runId: string;
+    let initialStatus: any = 'DRAFT';
+
+    if (deptRun) {
+      runId = deptRun.id;
+      initialStatus = deptRun.status;
+      await prisma.corporatePayrollRun.update({
+        where: { id: runId },
+        data: {
+          status: 'VALIDATED',
+          validatedBy: req.user!.fullName,
+          validatedAt: new Date()
+        }
+      });
+    } else {
+      const runNumber = `PR-${period.year}${String(period.month).padStart(2, '0')}-DEPT-${department.code || department.id.slice(0, 4).toUpperCase()}-${Date.now().toString().slice(-4)}`;
+      const createdRun = await prisma.corporatePayrollRun.create({
+        data: {
+          companyId,
+          periodId: period.id,
+          runNumber,
+          status: 'VALIDATED',
+          validatedBy: req.user!.fullName,
+          validatedAt: new Date(),
+          totalEmployees: eligibleEmployees.length,
+          validationNotes: {
+            scope: {
+              type: 'DEPARTMENT',
+              departmentId: department.id,
+              departmentName: department.name,
+              targetCount: eligibleEmployees.length,
+              selectedEmployeeIds: parsed.selectedEmployeeIds || eligibleEmployees.map(e => e.id)
+            },
+            remarks: parsed.remarks || `Department batch for ${department.name}`
+          }
+        }
+      });
+      runId = createdRun.id;
+
+      await prisma.corporatePayrollTransition.create({
+        data: {
+          payrollRunId: runId,
+          fromStatus: 'DRAFT',
+          toStatus: 'VALIDATED',
+          actorName: req.user!.fullName,
+          actorRole: req.user!.roles[0] || 'payroll_admin',
+          remarks: `Initialized & validated department batch for ${department.name}`
+        }
+      });
+    }
+
+    // 7. Execute transactional calculations with per-employee outcome recording
+    let totalGross = new Decimal(0);
+    let totalDeductions = new Decimal(0);
+    let totalNet = new Decimal(0);
+    let totalEmployer = new Decimal(0);
+
+    const outcomes: any[] = [];
+
+    const updatedRun = await prisma.$transaction(async (tx) => {
+      // Clear existing slips for the employees being processed
+      await tx.corporatePayrollSlip.deleteMany({
+        where: {
+          payrollRunId: runId,
+          employeeId: { in: eligibleEmployees.map(e => e.id) }
+        }
+      });
+
+      for (const emp of eligibleEmployees) {
+        try {
+          const result = await PayrollCalculationEngine.calculateEmployee(
+            emp,
+            period,
+            ptSlabs,
+            statutoryConfig
+          );
+
+          totalGross = totalGross.plus(result.grossPay);
+          totalDeductions = totalDeductions.plus(result.deductionsPay);
+          totalNet = totalNet.plus(result.netPay);
+          totalEmployer = totalEmployer.plus(result.employerCost);
+
+          const slip = await tx.corporatePayrollSlip.create({
+            data: {
+              payrollRunId: runId,
+              employeeId: emp.id,
+              workingDays: Number(result.attendance.calendarDays),
+              payableDays: result.attendance.payableDays.toNumber(),
+              lopDays: result.attendance.lopDays.toNumber(),
+              unpaidDays: result.attendance.unpaidMidMonthDays.toNumber(),
+              arrearsAmount: 0,
+              reimbursementAmount: 0,
+              variableEarnings: 0,
+              pfWageBasis: result.pfWageBasis.toNumber(),
+              esiWageBasis: result.esiWageBasis.toNumber(),
+              ptWageBasis: result.ptWageBasis.toNumber(),
+              grossPay: result.grossPay.toNumber(),
+              deductionsPay: result.deductionsPay.toNumber(),
+              netPay: result.netPay.toNumber(),
+              employerCost: result.employerCost.toNumber(),
+              calculationSnapshot: {
+                attendance: result.attendance as any,
+                exceptions: result.exceptions,
+                calculatedAt: new Date().toISOString()
+              },
+              items: {
+                create: result.items.map(i => ({
+                  code: i.code,
+                  name: i.name,
+                  type: i.type,
+                  amount: i.calculatedAmount.toNumber()
+                }))
+              }
+            }
+          });
+
+          outcomes.push({
+            employeeId: emp.id,
+            employeeCode: emp.employeeCode,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            success: true,
+            slipId: slip.id,
+            payableDays: result.attendance.payableDays.toNumber(),
+            lopDays: result.attendance.lopDays.toNumber(),
+            grossPay: result.grossPay.toNumber(),
+            deductionsPay: result.deductionsPay.toNumber(),
+            netPay: result.netPay.toNumber(),
+            employerCost: result.employerCost.toNumber(),
+            warnings: result.exceptions
+          });
+        } catch (empErr: any) {
+          outcomes.push({
+            employeeId: emp.id,
+            employeeCode: emp.employeeCode,
+            employeeName: `${emp.firstName} ${emp.lastName}`,
+            success: false,
+            error: empErr?.message || 'Calculation failed'
+          });
+        }
+      }
+
+      // Update Run Status and Totals
+      const finalRun = await tx.corporatePayrollRun.update({
+        where: { id: runId },
+        data: {
+          status: 'CALCULATED',
+          totalEmployees: eligibleEmployees.length,
+          totalGross: totalGross.toNumber(),
+          totalDeductions: totalDeductions.toNumber(),
+          totalNetPay: totalNet.toNumber(),
+          totalEmployerCost: totalEmployer.toNumber(),
+          calculatedAt: new Date()
+        },
+        include: {
+          period: true,
+          transitions: { orderBy: { timestamp: 'desc' } }
+        }
+      });
+
+      await tx.corporatePayrollTransition.create({
+        data: {
+          payrollRunId: runId,
+          fromStatus: 'VALIDATED',
+          toStatus: 'CALCULATED',
+          actorName: req.user!.fullName,
+          actorRole: req.user!.roles[0] || 'payroll_admin',
+          remarks: `Processed department payroll for ${department.name}: ${outcomes.filter(o => o.success).length} slips created.`
+        }
+      });
+
+      return finalRun;
+    });
+
+    await recordAudit(req, 'PROCESS_DEPARTMENT_PAYROLL', 'CorporatePayrollRun', runId, {
+      departmentId: department.id,
+      departmentName: department.name,
+      processedEmployees: outcomes.filter(o => o.success).length,
+      totalNetPay: totalNet.toNumber()
+    });
+
+    res.status(200).json({
+      success: true,
+      run: updatedRun,
+      summary: {
+        totalEmployees: eligibleEmployees.length,
+        processedCount: outcomes.filter(o => o.success).length,
+        failedCount: outcomes.filter(o => !o.success).length,
+        totalGross: totalGross.toNumber(),
+        totalDeductions: totalDeductions.toNumber(),
+        totalNetPay: totalNet.toNumber(),
+        totalEmployerCost: totalEmployer.toNumber()
+      },
+      results: outcomes
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 // 1.4 Single Run Details with Slips, Transitions, and Notes
 corporatePayrollRouter.get('/runs/:id', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
@@ -1095,6 +1748,70 @@ corporatePayrollRouter.post('/runs/:id/approve', authenticate, requireRole(['fin
 
     await recordAudit(req, 'APPROVE_PAYROLL_RUN', 'CorporatePayrollRun', run.id, { totalNetPay: Number(run.totalNetPay) });
     res.status(200).json({ run: updated });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// STAGE 5b: REJECT RUN (Requires Reason, Transitions to VALIDATED with Audit)
+corporatePayrollRouter.post('/runs/:id/reject', authenticate, requireRole(['finance_admin', 'company_admin', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  try {
+    const schema = z.object({
+      reason: z.string().min(5, 'Rejection reason must be at least 5 characters')
+    });
+    const { reason } = schema.parse(req.body);
+
+    const run = await prisma.corporatePayrollRun.findFirst({
+      where: { id: String(req.params.id), companyId: req.user!.companyId }
+    });
+    if (!run) throw new AppError('Payroll run not found', 404);
+    if (run.status === 'PAID') {
+      throw new AppError('Cannot reject a finalized PAID payroll run.', 400);
+    }
+
+    const existingNotes = (run.validationNotes as any) || {};
+    const rejectionRecord = {
+      rejectedAt: new Date().toISOString(),
+      rejectedBy: req.user!.fullName,
+      rejectedById: req.user!.userId,
+      rejectedRole: req.user!.roles[0] || 'finance_admin',
+      previousStatus: run.status,
+      reason
+    };
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.corporatePayrollRun.update({
+        where: { id: run.id },
+        data: {
+          status: 'VALIDATED',
+          validationNotes: {
+            ...existingNotes,
+            rejection: rejectionRecord,
+            rejectionHistory: [...(existingNotes.rejectionHistory || []), rejectionRecord]
+          }
+        }
+      });
+
+      await tx.corporatePayrollTransition.create({
+        data: {
+          payrollRunId: run.id,
+          fromStatus: run.status,
+          toStatus: 'VALIDATED',
+          actorName: req.user!.fullName,
+          actorRole: req.user!.roles[0] || 'finance_admin',
+          remarks: `Batch rejected by ${req.user!.fullName}: ${reason}`
+        }
+      });
+
+      return u;
+    });
+
+    await recordAudit(req, 'REJECT_PAYROLL_RUN', 'CorporatePayrollRun', run.id, { reason, previousStatus: run.status });
+    res.status(200).json({
+      success: true,
+      run: updated,
+      message: `Payroll run rejected and returned to VALIDATED stage. Reason: ${reason}`
+    });
   } catch (error) {
     next(error);
   }

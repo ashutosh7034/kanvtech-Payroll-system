@@ -659,16 +659,22 @@ export class PayrollCalculationEngine {
     }
 
     if (tdsAmount.greaterThan(0)) {
-      deductionsPay = deductionsPay.plus(tdsAmount);
-      items.push({
-        code: 'TDS',
-        name: `Income Tax (TDS - ${policy.taxRegime} Regime)`,
-        type: 'DEDUCTION',
-        category: 'STATUTORY_DEDUCTION',
-        configuredMonthly: tdsAmount,
-        calculatedAmount: tdsAmount,
-        ruleApplied: tdsRuleApplied
-      });
+      // TDS deduction cannot exceed available net earnings for the pay period (Section 192)
+      const availableForTds = Decimal.max(0, grossPay.minus(deductionsPay));
+      const effectiveTds = Decimal.min(tdsAmount, availableForTds);
+
+      if (effectiveTds.greaterThan(0)) {
+        deductionsPay = deductionsPay.plus(effectiveTds);
+        items.push({
+          code: 'TDS',
+          name: `Income Tax (TDS - ${policy.taxRegime} Regime)`,
+          type: 'DEDUCTION',
+          category: 'STATUTORY_DEDUCTION',
+          configuredMonthly: tdsAmount,
+          calculatedAmount: effectiveTds,
+          ruleApplied: tdsRuleApplied + (effectiveTds.lessThan(tdsAmount) ? ` (Capped at available earnings ₹${effectiveTds.toFixed(2)})` : '')
+        });
+      }
     }
 
     // E. Active Loan Recoveries

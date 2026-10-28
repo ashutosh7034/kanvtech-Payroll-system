@@ -40,6 +40,7 @@ import { CreatePayrollRunModal } from '../components/payroll/CreatePayrollRunMod
 import { ManualAdjustmentModal } from '../components/payroll/ManualAdjustmentModal';
 import { TdsDeferralModal } from '../components/payroll/TdsDeferralModal';
 import { DetailedCalculationModal } from '../components/payroll/DetailedCalculationModal';
+import { DepartmentPayrollWorkspace } from '../components/payroll/DepartmentPayrollWorkspace';
 
 interface StageDefinition {
   stage: number;
@@ -60,7 +61,7 @@ const SEVEN_STAGES: StageDefinition[] = [
 
 export const PayrollProcessingView: React.FC = () => {
   const { hasRole, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'runs' | 'editor' | 'tds'>('runs');
+  const [activeTab, setActiveTab] = useState<'runs' | 'dept-payroll' | 'editor' | 'tds'>('runs');
 
   // Runs & Period State
   const [runs, setRuns] = useState<any[]>([]);
@@ -541,12 +542,18 @@ export const PayrollProcessingView: React.FC = () => {
       />
 
       {/* Primary Navigation Tabs with Plain Language */}
-      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px' }}>
+      <div style={{ display: 'flex', gap: '8px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px', flexWrap: 'wrap' }}>
         <button
           className={`btn btn-sm ${activeTab === 'runs' ? 'btn-primary' : 'btn-outline'}`}
           onClick={() => setActiveTab('runs')}
         >
           <Layers size={14} /> Monthly Payroll Runs ({runs.length})
+        </button>
+        <button
+          className={`btn btn-sm ${activeTab === 'dept-payroll' ? 'btn-primary' : 'btn-outline'}`}
+          onClick={() => setActiveTab('dept-payroll')}
+        >
+          <Building size={14} /> Department Payroll Process
         </button>
         <button
           className={`btn btn-sm ${activeTab === 'editor' ? 'btn-primary' : 'btn-outline'}`}
@@ -1273,6 +1280,17 @@ export const PayrollProcessingView: React.FC = () => {
             );
           })()}
         </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1b: DEPARTMENT PAYROLL PROCESS WORKSPACE (PHASE B - I)                */}
+      {/* ========================================================================= */}
+      {activeTab === 'dept-payroll' && (
+        <DepartmentPayrollWorkspace
+          periods={periods}
+          initialPeriodId={selectedPeriodId || periods[0]?.id}
+          onRefreshRuns={fetchRuns}
+        />
       )}
 
       {/* ========================================================================= */}
