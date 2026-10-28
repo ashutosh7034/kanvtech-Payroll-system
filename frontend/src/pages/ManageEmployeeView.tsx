@@ -388,8 +388,22 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
   };
 
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const focusField = (fieldId: string) => {
+    setTimeout(() => {
+      const el = document.getElementById(fieldId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus({ preventScroll: true });
+      }
+    }, 60);
+  };
+
+  const handleSubmit = async (e?: React.FormEvent) => {
+    if (e && e.preventDefault) {
+      e.preventDefault();
+    }
+    if (submitting) return;
+
     setError(null);
     setSuccessMessage(null);
 
@@ -397,31 +411,37 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
     if (!formData.firstName.trim()) {
       setActiveTab('EMPLOYMENT');
       setError('First Name is required');
+      focusField('emp-field-firstName');
       return;
     }
     if (!formData.lastName.trim()) {
       setActiveTab('EMPLOYMENT');
       setError('Last Name is required');
+      focusField('emp-field-lastName');
       return;
     }
     if (!formData.employeeCode.trim()) {
       setActiveTab('EMPLOYMENT');
       setError('Employee Code is required');
+      focusField('emp-field-employeeCode');
       return;
     }
     if (!formData.branchId) {
       setActiveTab('EMPLOYMENT');
       setError('Branch is required');
+      focusField('emp-field-branchId');
       return;
     }
     if (!formData.departmentId) {
       setActiveTab('EMPLOYMENT');
       setError('Department is required');
+      focusField('emp-field-departmentId');
       return;
     }
     if (!formData.designationId) {
       setActiveTab('EMPLOYMENT');
       setError('Designation is required');
+      focusField('emp-field-designationId');
       return;
     }
 
@@ -485,8 +505,8 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
         setSuccessMessage('Employee enrolled successfully!');
       }
 
-      onSuccess?.();
       setTimeout(() => {
+        onSuccess?.();
         onBack();
       }, 900);
     } catch (err: any) {
@@ -507,7 +527,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
   }
 
   return (
-    <div className="manage-employee-page">
+    <form className="manage-employee-page" onSubmit={handleSubmit} noValidate>
         <div className="spine-header-bar">
           <div className="spine-header-title">
             <button 
@@ -594,6 +614,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>First Name *</label>
                 <input 
                   type="text" 
+                  id="emp-field-firstName"
                   className="form-input" 
                   style={{ height: '30px', fontSize: '0.8125rem', padding: '2px 8px' }}
                   placeholder="Enter First Name" 
@@ -619,6 +640,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>Last Name *</label>
                 <input 
                   type="text" 
+                  id="emp-field-lastName"
                   className="form-input" 
                   style={{ height: '30px', fontSize: '0.8125rem', padding: '2px 8px' }}
                   placeholder="Enter Last Name" 
@@ -635,6 +657,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <label style={{ display: 'block', fontSize: '0.72rem', fontWeight: 600, color: '#475569', marginBottom: '2px' }}>Employee Code *</label>
                 <input 
                   type="text" 
+                  id="emp-field-employeeCode"
                   className="form-input" 
                   style={{ height: '30px', fontSize: '0.8125rem', padding: '2px 8px', fontFamily: 'monospace' }}
                   placeholder="Enter Employee Code" 
@@ -768,6 +791,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <span className="spine-org-label">Branch *</span>
                 <div className="spine-org-input-wrapper">
                   <select 
+                    id="emp-field-branchId"
                     value={formData.branchId} 
                     onChange={e => setFormData({ ...formData, branchId: e.target.value })}
                     required
@@ -785,6 +809,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <span className="spine-org-label">Department *</span>
                 <div className="spine-org-input-wrapper">
                   <select 
+                    id="emp-field-departmentId"
                     value={formData.departmentId} 
                     onChange={e => setFormData({ ...formData, departmentId: e.target.value })}
                     required
@@ -802,6 +827,7 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                 <span className="spine-org-label">Designation *</span>
                 <div className="spine-org-input-wrapper">
                   <select 
+                    id="emp-field-designationId"
                     value={formData.designationId} 
                     onChange={e => setFormData({ ...formData, designationId: e.target.value })}
                     required
@@ -2272,12 +2298,11 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
 
         </div>
 
-        {/* REGION 4: FIXED BOTTOM ACTION BAR */}
+        {/* REGION 4: BOTTOM ACTION BAR */}
         <div className="spine-bottom-bar">
           <button 
-            type="button" 
+            type="submit" 
             className="spine-btn-save" 
-            onClick={handleSubmit} 
             disabled={submitting}
           >
             <Save size={14} /> {submitting ? 'SAVING...' : 'SAVE ALL'}
@@ -2287,10 +2312,24 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
             type="button" 
             className="spine-btn-cancel" 
             onClick={onBack}
+            disabled={submitting}
           >
             <X size={14} /> CANCEL
           </button>
+
+          {error && (
+            <div style={{ marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '6px', color: '#b91c1c', fontSize: '0.8125rem', fontWeight: 500 }}>
+              <AlertCircle size={15} />
+              <span>{error}</span>
+            </div>
+          )}
+          {successMessage && (
+            <div style={{ marginLeft: '12px', display: 'flex', alignItems: 'center', gap: '6px', color: '#047857', fontSize: '0.8125rem', fontWeight: 500 }}>
+              <Check size={15} />
+              <span>{successMessage}</span>
+            </div>
+          )}
         </div>
-    </div>
+    </form>
   );
 };

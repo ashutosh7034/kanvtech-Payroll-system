@@ -1614,9 +1614,6 @@ th.money {
   padding: 0 28px;
   background: #ffffff;
   border-bottom: 1px solid #cbd5e1;
-  position: sticky;
-  top: 0;
-  z-index: 10;
   flex-shrink: 0;
 }
 
@@ -1637,10 +1634,7 @@ th.money {
   border-top: 1px solid #cbd5e1;
   border-bottom-left-radius: var(--radius-md, 8px);
   border-bottom-right-radius: var(--radius-md, 8px);
-  position: sticky;
-  bottom: 0;
-  z-index: 20;
-  box-shadow: 0 -4px 12px rgba(15, 23, 42, 0.06);
+  flex-shrink: 0;
 }
 
 @media (max-width: 1024px) {
@@ -1670,6 +1664,7 @@ th.money {
   }
   .manage-employee-page .spine-bottom-bar {
     padding: 12px 16px;
+    flex-wrap: wrap;
   }
 }
 
