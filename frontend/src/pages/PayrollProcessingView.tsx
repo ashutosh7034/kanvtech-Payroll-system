@@ -41,6 +41,7 @@ import { ManualAdjustmentModal } from '../components/payroll/ManualAdjustmentMod
 import { TdsDeferralModal } from '../components/payroll/TdsDeferralModal';
 import { DetailedCalculationModal } from '../components/payroll/DetailedCalculationModal';
 import { DepartmentPayrollWorkspace } from '../components/payroll/DepartmentPayrollWorkspace';
+import { formatAmount, formatCurrency } from '../utils/formatters';
 
 interface StageDefinition {
   stage: number;
@@ -783,7 +784,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0 }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Gross Salary Total</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-                ₹{grossTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(grossTotal)}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                 {activeRun?.status === 'PAID' ? 'Finalized earnings basis' : 'Total earnings basis'}
@@ -793,7 +794,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0 }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 600 }}>Total Deductions</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: 'var(--danger)', marginTop: '4px' }}>
-                ₹{deductionsTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(deductionsTotal)}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>PF, ESI, PT, TDS & Loans</div>
             </div>
@@ -801,7 +802,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0, borderLeft: '4px solid #0284c7' }}>
               <div style={{ fontSize: '0.75rem', color: '#0369a1', fontWeight: 600 }}>Net Disbursable</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#0284c7', marginTop: '4px' }}>
-                ₹{netPayTotal.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(netPayTotal)}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
                 {activeRun?.status === 'PAID' ? 'Finalized take-home' : 'Estimated take-home'}
@@ -811,7 +812,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0 }}>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Employer Contributions</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-                ₹{Math.max(0, Number(activeRun?.totalEmployerCost ?? 0) - grossTotal).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(Math.max(0, Number(activeRun?.totalEmployerCost ?? 0) - grossTotal))}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>PF, ESI & statutory dues</div>
             </div>
@@ -819,7 +820,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div className="panel" style={{ padding: '14px', margin: 0, borderLeft: '4px solid #6366f1' }}>
               <div style={{ fontSize: '0.75rem', color: '#4f46e5', fontWeight: 600 }}>Total Employer Cost</div>
               <div style={{ fontSize: '1.3rem', fontWeight: 700, color: '#4f46e5', marginTop: '4px' }}>
-                ₹{Number(activeRun?.totalEmployerCost ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(activeRun?.totalEmployerCost ?? 0)}
               </div>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>Total CTC cost</div>
             </div>
@@ -909,13 +910,13 @@ export const PayrollProcessingView: React.FC = () => {
                           <td>FY {run.period?.year || '2026-27'}</td>
                           <td>{run.totalEmployees} employees</td>
                           <td className="money">
-                            ₹{Number(run.totalGross ?? run.grossTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(run.totalGross ?? run.grossTotal ?? 0)}
                           </td>
                           <td className="money" style={{ color: 'var(--danger)' }}>
-                            ₹{Number(run.totalDeductions ?? run.deductionsTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(run.totalDeductions ?? run.deductionsTotal ?? 0)}
                           </td>
                           <td className="money" style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                            ₹{Number(run.totalNetPay ?? run.netTotal ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                            {formatCurrency(run.totalNetPay ?? run.netTotal ?? 0)}
                           </td>
                           <td>
                             <span
@@ -966,37 +967,69 @@ export const PayrollProcessingView: React.FC = () => {
           {/* SECTION 4: AUTHORITATIVE 12-COLUMN PAYROLL REVIEW & AUDIT SCREEN          */}
           {/* ========================================================================= */}
           {selectedRun && (() => {
-            const allRows = reviewTableData?.rows || (selectedRun?.slips || []).map((s: any) => ({
-              slipId: s.id,
-              employeeId: s.employeeId,
-              employeeCode: s.employee?.employeeCode,
-              employeeName: `${s.employee?.firstName} ${s.employee?.lastName}`,
-              department: s.employee?.department?.name || 'General',
-              payableDays: Number(s.payableDays || 30),
-              lopDays: Number(s.lopDays || 0),
-              grossEarnings: Number(s.grossPay || 0),
-              manualAdjustments: 0,
-              employeeDeductions: Number(s.deductionsPay || 0),
-              tds: Number(s.tdsWithholding || 0),
-              employerContributions: Number(s.employerCost || 0),
-              netPay: Number(s.netPay || 0),
-              status: selectedRun.status,
-              items: s.items || []
-            }));
+            const rawRows = reviewTableData?.rows || selectedRun?.slips || [];
+            const allRows = rawRows.map((item: any) => {
+              // Normalize properties across different API response formats (slips vs review-table)
+              const slipId = item.slipId || item.id;
+              const employeeId = item.employeeId || item.employee?.id;
+              const employeeCode = item.employeeCode || item.employee?.employeeCode || '—';
+              const employeeName = item.employeeName || (item.employee ? `${item.employee.firstName || ''} ${item.employee.lastName || ''}`.trim() : 'Unknown Employee');
+              const department = item.department || item.employee?.department?.name || 'General';
+              const payableDays = Number(item.payableDays ?? 30);
+              const lopDays = Number(item.lopDays ?? 0);
+              const grossVal = Number(item.grossEarnings ?? item.grossPay ?? 0);
+              const manualAdjVal = Number(item.manualAdjustments ?? 0);
+              const dedVal = Number(item.employeeDeductions ?? item.deductionsPay ?? 0);
+              const tdsVal = Number(item.tds ?? item.tdsWithholding ?? 0);
+              const empCostVal = Number(item.employerContributions ?? item.employerCost ?? 0);
+              const netVal = Number(item.netPay ?? 0);
+
+              return {
+                ...item,
+                slipId,
+                employeeId,
+                employeeCode,
+                employeeName,
+                department,
+                payableDays,
+                lopDays,
+                grossEarnings: grossVal,
+                grossPay: grossVal,
+                manualAdjustments: manualAdjVal,
+                employeeDeductions: dedVal,
+                deductionsPay: dedVal,
+                tds: tdsVal,
+                employerContributions: empCostVal,
+                employerCost: empCostVal,
+                netPay: netVal,
+                status: item.status || selectedRun.status,
+                items: item.items || []
+              };
+            });
 
             const filteredRows = reviewDeptFilter === 'ALL'
               ? allRows
               : allRows.filter((r: any) => r.department === reviewDeptFilter);
 
-            const deptSummaries = reviewTableData?.departmentSummaries || [];
-            const grandTotals = reviewTableData?.grandTotals || {
+            const deptSummaries = (reviewTableData?.departmentSummaries || reviewTableData?.departmentTotals || []).map((ds: any) => ({
+              departmentId: ds.departmentId || ds.id || ds.name,
+              departmentName: ds.departmentName || ds.name,
+              employeeCount: Number(ds.employeeCount || 0),
+              grossPay: Number(ds.grossPay ?? ds.grossEarnings ?? 0),
+              deductionsPay: Number(ds.deductionsPay ?? ds.employeeDeductions ?? 0),
+              tds: Number(ds.tds ?? 0),
+              employerCost: Number(ds.employerCost ?? ds.employerContributions ?? 0),
+              netPay: Number(ds.netPay ?? 0)
+            }));
+
+            const grandTotals = {
               totalEmployees: allRows.length,
-              grossEarnings: allRows.reduce((sum: number, r: any) => sum + r.grossEarnings, 0),
-              manualAdjustments: allRows.reduce((sum: number, r: any) => sum + r.manualAdjustments, 0),
-              employeeDeductions: allRows.reduce((sum: number, r: any) => sum + r.employeeDeductions, 0),
-              tds: allRows.reduce((sum: number, r: any) => sum + r.tds, 0),
-              employerContributions: allRows.reduce((sum: number, r: any) => sum + r.employerContributions, 0),
-              netPay: allRows.reduce((sum: number, r: any) => sum + r.netPay, 0)
+              grossEarnings: Number(reviewTableData?.grandTotals?.grossEarnings ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.grossEarnings ?? r.grossPay) || 0), 0)),
+              manualAdjustments: Number(reviewTableData?.grandTotals?.manualAdjustments ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.manualAdjustments) || 0), 0)),
+              employeeDeductions: Number(reviewTableData?.grandTotals?.employeeDeductions ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.employeeDeductions ?? r.deductionsPay) || 0), 0)),
+              tds: Number(reviewTableData?.grandTotals?.tds ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.tds) || 0), 0)),
+              employerContributions: Number(reviewTableData?.grandTotals?.employerContributions ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.employerContributions ?? r.employerCost) || 0), 0)),
+              netPay: Number(reviewTableData?.grandTotals?.netPay ?? allRows.reduce((sum: number, r: any) => sum + (Number(r.netPay) || 0), 0))
             };
 
             const uniqueDepts: string[] = Array.from(new Set(allRows.map((r: any) => r.department))).filter(Boolean) as string[];
@@ -1100,7 +1133,7 @@ export const PayrollProcessingView: React.FC = () => {
                         <strong>{ds.departmentName}</strong>
                         <span className="badge badge-gray" style={{ fontSize: '0.65rem' }}>{ds.employeeCount} staff</span>
                         <span style={{ color: 'var(--primary)', fontWeight: 600 }}>
-                          ₹{Number(ds.netPay).toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          {formatCurrency(ds.netPay, { maximumFractionDigits: 0 })}
                         </span>
                       </div>
                     ))}
@@ -1156,7 +1189,7 @@ export const PayrollProcessingView: React.FC = () => {
                                 )}
                               </td>
                               <td className="money">
-                                ₹{row.grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {formatCurrency(row.grossEarnings ?? row.grossPay)}
                               </td>
                               <td className="money">
                                 {hasAdj ? (
@@ -1164,23 +1197,23 @@ export const PayrollProcessingView: React.FC = () => {
                                     className={`badge ${row.manualAdjustments > 0 ? 'badge-success' : 'badge-danger'}`}
                                     style={{ fontSize: '0.675rem' }}
                                   >
-                                    {row.manualAdjustments > 0 ? '+' : ''}₹{row.manualAdjustments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                    {row.manualAdjustments > 0 ? '+' : ''}{formatCurrency(row.manualAdjustments)}
                                   </span>
                                 ) : (
                                   <span style={{ color: 'var(--text-muted)' }}>—</span>
                                 )}
                               </td>
                               <td className="money" style={{ color: 'var(--danger)' }}>
-                                ₹{row.employeeDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {formatCurrency(row.employeeDeductions ?? row.deductionsPay)}
                               </td>
                               <td className="money" style={{ color: '#92400e' }}>
-                                ₹{row.tds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {formatCurrency(row.tds)}
                               </td>
                               <td className="money" style={{ color: 'var(--text-muted)' }}>
-                                ₹{row.employerContributions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {formatCurrency(row.employerContributions ?? row.employerCost)}
                               </td>
                               <td className="money" style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                                ₹{row.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                                {formatCurrency(row.netPay)}
                               </td>
                               <td style={{ textAlign: 'center' }}>
                                 <span
@@ -1252,24 +1285,24 @@ export const PayrollProcessingView: React.FC = () => {
                         </td>
                         <td style={{ textAlign: 'center' }}>—</td>
                         <td className="money">
-                          ₹{grandTotals.grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(grandTotals.grossEarnings)}
                         </td>
                         <td className="money">
                           {grandTotals.manualAdjustments !== 0 ? (
-                            `₹${grandTotals.manualAdjustments > 0 ? '+' : ''}${grandTotals.manualAdjustments.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`
+                            `${grandTotals.manualAdjustments > 0 ? '+' : ''}${formatCurrency(grandTotals.manualAdjustments)}`
                           ) : '—'}
                         </td>
                         <td className="money" style={{ color: 'var(--danger)' }}>
-                          ₹{grandTotals.employeeDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(grandTotals.employeeDeductions)}
                         </td>
                         <td className="money" style={{ color: '#92400e' }}>
-                          ₹{grandTotals.tds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(grandTotals.tds)}
                         </td>
                         <td className="money">
-                          ₹{grandTotals.employerContributions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(grandTotals.employerContributions)}
                         </td>
                         <td className="money" style={{ color: 'var(--primary)', fontSize: '0.85rem' }}>
-                          ₹{grandTotals.netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(grandTotals.netPay)}
                         </td>
                         <td colSpan={2}></td>
                       </tr>
@@ -1423,23 +1456,23 @@ export const PayrollProcessingView: React.FC = () => {
                 </div>
                 <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Arrears</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumArrears.toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{formatCurrency(sumArrears, { maximumFractionDigits: 0 })}</div>
                 </div>
                 <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Variable Pay</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumVariable.toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{formatCurrency(sumVariable, { maximumFractionDigits: 0 })}</div>
                 </div>
                 <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 600 }}>Manual Ded.</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--danger)', marginTop: '2px' }}>₹{sumManualDed.toLocaleString('en-IN')}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--danger)', marginTop: '2px' }}>{formatCurrency(sumManualDed, { maximumFractionDigits: 0 })}</div>
                 </div>
                 <div style={{ background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Gross Payroll</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>₹{sumGross.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, marginTop: '2px' }}>{formatCurrency(sumGross, { maximumFractionDigits: 0 })}</div>
                 </div>
                 <div style={{ background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 'var(--radius-sm)', padding: '10px 12px' }}>
                   <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 600 }}>Net Disbursable</div>
-                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#166534', marginTop: '2px' }}>₹{sumNet.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</div>
+                  <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#166534', marginTop: '2px' }}>{formatCurrency(sumNet, { maximumFractionDigits: 0 })}</div>
                 </div>
               </div>
             )}
@@ -1612,7 +1645,7 @@ export const PayrollProcessingView: React.FC = () => {
                           <td>
                             <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{emp.structureName}</div>
                             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                              Gross: ₹{Number(emp.monthlyGrossConfigured || emp.grossPay || 0).toLocaleString('en-IN')}
+                              Gross: {formatCurrency(emp.monthlyGrossConfigured || emp.grossPay || 0, { maximumFractionDigits: 0 })}
                             </div>
                             {emp.validationErrors && emp.validationErrors.length > 0 && (
                               <div style={{ fontSize: '0.65rem', color: 'var(--danger)', marginTop: '2px', fontWeight: 600 }}>
@@ -1757,22 +1790,22 @@ export const PayrollProcessingView: React.FC = () => {
 
                           {/* TDS */}
                           <td className="money" style={{ fontSize: '0.8rem' }}>
-                            ₹{Number(emp.tdsAdjustment || emp.tds || 0).toLocaleString('en-IN')}
+                            {formatCurrency(emp.tdsAdjustment || emp.tds || 0, { maximumFractionDigits: 0 })}
                           </td>
 
                           {/* Gross Salary */}
                           <td className="money" style={{ fontSize: '0.8rem' }}>
-                            ₹{Number(emp.grossPay || 0).toLocaleString('en-IN')}
+                            {formatCurrency(emp.grossPay || 0, { maximumFractionDigits: 0 })}
                           </td>
 
                           {/* Deductions */}
                           <td className="money" style={{ fontSize: '0.8rem', color: 'var(--danger)' }}>
-                            ₹{Number(emp.deductionsPay || 0).toLocaleString('en-IN')}
+                            {formatCurrency(emp.deductionsPay || 0, { maximumFractionDigits: 0 })}
                           </td>
 
                           {/* Net Pay */}
                           <td className="money" style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--primary)' }}>
-                            ₹{Number(emp.netPay || 0).toLocaleString('en-IN')}
+                            {formatCurrency(emp.netPay || 0, { maximumFractionDigits: 0 })}
                             {emp.isNetLessThan25Percent && (
                               <div style={{ fontSize: '0.625rem', color: 'var(--danger)', fontWeight: 600 }}>
                                 &lt; 25% Take-Home
@@ -1883,10 +1916,10 @@ export const PayrollProcessingView: React.FC = () => {
                       <td>
                         <span className="badge badge-brand" style={{ fontSize: '0.7rem' }}>{t.regime}</span>
                       </td>
-                      <td className="money">₹{Number(t.annualGross).toLocaleString('en-IN')}</td>
-                      <td className="money" style={{ color: 'var(--danger)' }}>₹{Number(t.annualTax).toLocaleString('en-IN')}</td>
+                      <td className="money">{formatCurrency(t.annualGross, { maximumFractionDigits: 0 })}</td>
+                      <td className="money" style={{ color: 'var(--danger)' }}>{formatCurrency(t.annualTax, { maximumFractionDigits: 0 })}</td>
                       <td className="money" style={{ fontWeight: 700, color: 'var(--primary)' }}>
-                        ₹{Number(t.monthlyTds).toLocaleString('en-IN')}
+                        {formatCurrency(t.monthlyTds, { maximumFractionDigits: 0 })}
                       </td>
                     </tr>
                   ))}
@@ -2148,7 +2181,7 @@ export const PayrollProcessingView: React.FC = () => {
                           {item.type}
                         </span>
                       </td>
-                      <td className="money">₹{Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="money">{formatCurrency(item.amount)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -2157,7 +2190,7 @@ export const PayrollProcessingView: React.FC = () => {
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 14px', background: '#f8fafc', borderRadius: 'var(--radius-sm)', fontWeight: 700 }}>
                 <span>Net Disbursable Salary:</span>
                 <span style={{ color: 'var(--primary)' }}>
-                  ₹{Number(payslipData.netPay).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(payslipData.netPay)}
                 </span>
               </div>
             </div>

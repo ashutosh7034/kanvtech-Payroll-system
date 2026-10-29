@@ -1046,10 +1046,13 @@ corporatePayrollRouter.get('/runs/:id/review-table', authenticate, async (req: R
         lopDays: Number(slip.lopDays),
         unpaidDays: Number(slip.unpaidDays),
         grossPay: Number(slip.grossPay),
+        grossEarnings: Number(slip.grossPay),
         manualAdjustments: Number(netManualAdjustment),
         deductionsPay: Number(slip.deductionsPay),
+        employeeDeductions: Number(slip.deductionsPay),
         tds: Number(tdsAmount),
         employerCost: Number(slip.employerCost),
+        employerContributions: Number(slip.employerCost),
         netPay: Number(slip.netPay),
         status: run.status,
         adjustmentsList: adjustments,
@@ -1064,14 +1067,32 @@ corporatePayrollRouter.get('/runs/:id/review-table', authenticate, async (req: R
 
     const departmentTotals = Object.values(departmentSummary).map(d => ({
       name: d.name,
+      departmentName: d.name,
+      departmentId: d.name,
       employeeCount: d.employeeCount,
       grossPay: d.grossPay.toNumber(),
+      grossEarnings: d.grossPay.toNumber(),
       manualAdjustments: d.manualAdjustments.toNumber(),
       deductionsPay: d.deductionsPay.toNumber(),
+      employeeDeductions: d.deductionsPay.toNumber(),
       tds: d.tds.toNumber(),
       employerCost: d.employerCost.toNumber(),
+      employerContributions: d.employerCost.toNumber(),
       netPay: d.netPay.toNumber()
     }));
+
+    const grandTotals = {
+      totalEmployees: rows.length,
+      grossEarnings: rows.reduce((sum, r) => sum + r.grossPay, 0),
+      grossPay: rows.reduce((sum, r) => sum + r.grossPay, 0),
+      manualAdjustments: rows.reduce((sum, r) => sum + r.manualAdjustments, 0),
+      deductionsPay: rows.reduce((sum, r) => sum + r.deductionsPay, 0),
+      employeeDeductions: rows.reduce((sum, r) => sum + r.deductionsPay, 0),
+      tds: rows.reduce((sum, r) => sum + r.tds, 0),
+      employerCost: rows.reduce((sum, r) => sum + r.employerCost, 0),
+      employerContributions: rows.reduce((sum, r) => sum + r.employerCost, 0),
+      netPay: rows.reduce((sum, r) => sum + r.netPay, 0)
+    };
 
     // Available salary components for adjustments dropdown
     const availableComponents = await prisma.salaryComponent.findMany({
@@ -1101,6 +1122,8 @@ corporatePayrollRouter.get('/runs/:id/review-table', authenticate, async (req: R
       },
       rows,
       departmentTotals,
+      departmentSummaries: departmentTotals,
+      grandTotals,
       availableComponents,
       transitions: run.transitions
     });

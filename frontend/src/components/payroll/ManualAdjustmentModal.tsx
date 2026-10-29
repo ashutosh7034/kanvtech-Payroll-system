@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
 import {
   X,
   Edit3,
@@ -233,7 +234,7 @@ export const ManualAdjustmentModal: React.FC<ManualAdjustmentModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>1. Calculated Gross</div>
                 <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '2px' }}>
-                  ₹{originalGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(originalGross)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Engine auto-math</div>
               </div>
@@ -243,7 +244,7 @@ export const ManualAdjustmentModal: React.FC<ManualAdjustmentModalProps> = ({
                   2. Manual Adj
                 </div>
                 <div style={{ fontSize: '1rem', fontWeight: 700, color: adjustmentType === 'ADDITION' ? '#166534' : 'var(--danger)', marginTop: '2px' }}>
-                  {adjustmentType === 'ADDITION' ? '+' : '-'} ₹{numAmount.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {adjustmentType === 'ADDITION' ? '+' : '-'} {formatCurrency(numAmount)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>{adjustmentType}</div>
               </div>
@@ -251,7 +252,7 @@ export const ManualAdjustmentModal: React.FC<ManualAdjustmentModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>3. Revised Gross</div>
                 <div style={{ fontSize: '1rem', fontWeight: 700, marginTop: '2px' }}>
-                  ₹{simulatedRevisedGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(simulatedRevisedGross)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>After adjustments</div>
               </div>
@@ -259,7 +260,7 @@ export const ManualAdjustmentModal: React.FC<ManualAdjustmentModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--primary)', fontWeight: 600, textTransform: 'uppercase' }}>4. Final Net Pay</div>
                 <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginTop: '2px' }}>
-                  ₹{simulatedRevisedNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(simulatedRevisedNet)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Estimated take-home</div>
               </div>

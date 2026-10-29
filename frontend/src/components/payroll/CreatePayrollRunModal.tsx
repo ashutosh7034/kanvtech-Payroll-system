@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
 import {
   X,
   Play,
@@ -408,7 +409,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                           <td>{emp.department?.name || '—'}</td>
                           <td>{emp.branch?.name || '—'}</td>
                           <td className="money">
-                            {emp.hasSalaryStructure ? `₹${emp.monthlyGross.toLocaleString('en-IN', { minimumFractionDigits: 2 })}` : '—'}
+                            {emp.hasSalaryStructure ? formatCurrency(emp.monthlyGross) : '—'}
                           </td>
                           <td>
                             {emp.isEligible ? (

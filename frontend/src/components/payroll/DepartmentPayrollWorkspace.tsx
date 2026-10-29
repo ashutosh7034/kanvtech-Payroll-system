@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { api } from '../../services/api';
 import { useAuth } from '../../contexts/AuthContext';
+import { formatCurrency } from '../../utils/formatters';
 import {
   Building,
   Users,
@@ -517,7 +518,7 @@ export const DepartmentPayrollWorkspace: React.FC<DepartmentPayrollWorkspaceProp
             <TrendingUp size={16} style={{ color: '#10b981' }} />
           </div>
           <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-            ₹{Number(summary.totalGross || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(summary.totalGross)}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             Calculated salary base
@@ -530,7 +531,7 @@ export const DepartmentPayrollWorkspace: React.FC<DepartmentPayrollWorkspaceProp
             <TrendingDown size={16} style={{ color: '#ef4444' }} />
           </div>
           <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-            ₹{Number(summary.totalDeductions || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(summary.totalDeductions)}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             PF, ESIC, PT, TDS, Loans
@@ -543,7 +544,7 @@ export const DepartmentPayrollWorkspace: React.FC<DepartmentPayrollWorkspaceProp
             <CreditCard size={16} style={{ color: 'var(--primary)' }} />
           </div>
           <div style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--primary)', marginTop: '4px' }}>
-            ₹{Number(summary.totalNetPay || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(summary.totalNetPay)}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             Electronic disbursement amount
@@ -556,7 +557,7 @@ export const DepartmentPayrollWorkspace: React.FC<DepartmentPayrollWorkspaceProp
             <ShieldCheck size={16} style={{ color: '#6366f1' }} />
           </div>
           <div style={{ fontSize: '1.3rem', fontWeight: 700, marginTop: '4px' }}>
-            ₹{Number(summary.totalEmployerCost || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            {formatCurrency(summary.totalEmployerCost)}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
             Employer PF + ESIC + Gratuity
@@ -833,17 +834,17 @@ export const DepartmentPayrollWorkspace: React.FC<DepartmentPayrollWorkspaceProp
 
                       {/* 9. Gross Earnings */}
                       <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                        ₹{Number(emp.earnings || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(emp.earnings)}
                       </td>
 
                       {/* 10. Deductions */}
                       <td style={{ textAlign: 'right', color: '#dc2626' }}>
-                        ₹{Number(emp.deductions || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(emp.deductions)}
                       </td>
 
                       {/* 11. Net Take-Home */}
                       <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--primary)' }}>
-                        ₹{Number(emp.netPay || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(emp.netPay)}
                       </td>
 
                       {/* 12. Processing Status */}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatCurrency } from '../../utils/formatters';
 import {
   X,
   Calculator,
@@ -76,7 +77,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
             <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Gross Earnings</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, marginTop: '2px' }}>
-                ₹{grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(grossEarnings)}
               </div>
               <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>
                 {manualAdjustments !== 0 ? `Incl. ₹${manualAdjustments > 0 ? '+' : ''}${manualAdjustments} Adj` : 'Pure formula earnings'}
@@ -86,7 +87,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
             <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
               <div style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 600 }}>Total Deductions</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, color: 'var(--danger)', marginTop: '2px' }}>
-                ₹{totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(totalDeductions)}
               </div>
               <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>PF, ESIC, PT, TDS</div>
             </div>
@@ -94,7 +95,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
             <div style={{ padding: '10px 12px', background: '#f0fdf4', border: '1px solid #86efac', borderRadius: 'var(--radius-sm)' }}>
               <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 600 }}>Net Disbursable</div>
               <div style={{ fontSize: '1.2rem', fontWeight: 700, color: '#166534', marginTop: '2px' }}>
-                ₹{netPay.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(netPay)}
               </div>
               <div style={{ fontSize: '0.675rem', color: '#166534' }}>Take-home bank credit</div>
             </div>
@@ -109,7 +110,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                   <TrendingUp size={14} /> Earnings & Allowances
                 </strong>
                 <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                  ₹{grossEarnings.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(grossEarnings)}
                 </span>
               </div>
 
@@ -124,7 +125,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                   {earnings.length === 0 ? (
                     <tr>
                       <td colSpan={2} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '16px' }}>
-                        Base CTC Gross: ₹{grossEarnings.toFixed(2)}
+                        Base CTC Gross: {formatCurrency(grossEarnings)}
                       </td>
                     </tr>
                   ) : (
@@ -132,7 +133,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                       <tr key={idx}>
                         <td>{item.name || item.code}</td>
                         <td className="money" style={{ fontWeight: 600 }}>
-                          ₹{Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(item.amount)}
                         </td>
                       </tr>
                     ))
@@ -148,7 +149,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                   <TrendingDown size={14} /> Employee Deductions
                 </strong>
                 <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--danger)' }}>
-                  ₹{totalDeductions.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(totalDeductions)}
                 </span>
               </div>
 
@@ -171,7 +172,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                       <tr key={idx}>
                         <td>{item.name || item.code}</td>
                         <td className="money" style={{ fontWeight: 600, color: 'var(--danger)' }}>
-                          ₹{Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                          {formatCurrency(item.amount)}
                         </td>
                       </tr>
                     ))
@@ -188,7 +189,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                 <ShieldCheck size={14} /> Employer Statutory Cost & Benefits
               </strong>
               <span style={{ fontSize: '0.75rem', fontWeight: 700 }}>
-                ₹{employerCost.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                {formatCurrency(employerCost)}
               </span>
             </div>
 
@@ -204,7 +205,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                 {employerItems.length === 0 ? (
                   <tr>
                     <td colSpan={3} style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '12px' }}>
-                      Calculated Employer PF (12%) / ESIC (3.25%) provision included in CTC: ₹{employerCost.toFixed(2)}
+                      Calculated Employer PF (12%) / ESIC (3.25%) provision included in CTC: {formatCurrency(employerCost)}
                     </td>
                   </tr>
                 ) : (
@@ -213,7 +214,7 @@ export const DetailedCalculationModal: React.FC<DetailedCalculationModalProps> =
                       <td>{item.name || item.code}</td>
                       <td>Statutory Compliance</td>
                       <td className="money" style={{ fontWeight: 600 }}>
-                        ₹{Number(item.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                        {formatCurrency(item.amount)}
                       </td>
                     </tr>
                   ))

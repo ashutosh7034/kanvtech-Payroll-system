@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { api } from '../../services/api';
+import { formatCurrency } from '../../utils/formatters';
 import {
   X,
   Calculator,
@@ -190,7 +191,7 @@ export const TdsDeferralModal: React.FC<TdsDeferralModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Current TDS</div>
                 <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--danger)', marginTop: '2px' }}>
-                  ₹{currentTds.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(currentTds)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Calculated withholding</div>
               </div>
@@ -198,7 +199,7 @@ export const TdsDeferralModal: React.FC<TdsDeferralModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.7rem', color: '#166534', fontWeight: 600 }}>Deferred Amount</div>
                 <div style={{ fontSize: '1.15rem', fontWeight: 700, color: '#166534', marginTop: '2px' }}>
-                  - ₹{numDeferral.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  - {formatCurrency(numDeferral)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: '#166534' }}>To be recovered</div>
               </div>
@@ -206,7 +207,7 @@ export const TdsDeferralModal: React.FC<TdsDeferralModalProps> = ({
               <div>
                 <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 600 }}>Net Disbursable</div>
                 <div style={{ fontSize: '1.15rem', fontWeight: 700, color: 'var(--primary)', marginTop: '2px' }}>
-                  ₹{simulatedRevisedNet.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  {formatCurrency(simulatedRevisedNet)}
                 </div>
                 <div style={{ fontSize: '0.675rem', color: 'var(--text-muted)' }}>Take-home after deferral</div>
               </div>
