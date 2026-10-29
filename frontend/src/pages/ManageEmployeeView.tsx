@@ -42,6 +42,10 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
   const [designations, setDesignations] = useState<any[]>([]);
   const [jobBands, setJobBands] = useState<any[]>([]);
   const [costCenters, setCostCenters] = useState<any[]>([]);
+  const [units, setUnits] = useState<any[]>([]);
+  const [employmentCategories, setEmploymentCategories] = useState<any[]>([]);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [jobPositions, setJobPositions] = useState<any[]>([]);
   const [customFieldDefs, setCustomFieldDefs] = useState<any[]>([]);
 
   // Photo preview
@@ -207,47 +211,60 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
   useEffect(() => {
     const loadMasters = async () => {
       try {
-        const [compRes, branchRes, deptRes, desigRes, jbRes, ccRes, cfRes]: any = await Promise.all([
+        const [compRes, branchRes, deptRes, desigRes, jbRes, ccRes, cfRes, unitRes, catRes, prjRes, posRes]: any = await Promise.all([
           api.get('/org/company').catch(() => ({ company: { name: 'Apex Global Technologies', legalName: 'Apex Global Technologies Pvt. Ltd.' } })),
-          api.get('/org/branches').catch(() => ({ branches: [] })),
-          api.get('/org/departments').catch(() => ({ departments: [] })),
-          api.get('/org/designations').catch(() => ({ designations: [] })),
-          api.get('/org/job-bands').catch(() => ({ jobBands: [] })),
-          api.get('/org/cost-centers').catch(() => ({ costCenters: [] })),
-          api.get('/employees/custom-fields/definitions').catch(() => ({ fields: [] }))
+          api.get('/masters/branches?status=ACTIVE&all=true').catch(() => api.get('/org/branches')).catch(() => ({ branches: [] })),
+          api.get('/masters/departments?status=ACTIVE&all=true').catch(() => api.get('/org/departments')).catch(() => ({ departments: [] })),
+          api.get('/masters/designations?status=ACTIVE&all=true').catch(() => api.get('/org/designations')).catch(() => ({ designations: [] })),
+          api.get('/masters/grades?status=ACTIVE&all=true').catch(() => api.get('/org/job-bands')).catch(() => ({ jobBands: [] })),
+          api.get('/masters/divisions?status=ACTIVE&all=true').catch(() => api.get('/org/cost-centers')).catch(() => ({ costCenters: [] })),
+          api.get('/employees/custom-fields/definitions').catch(() => ({ fields: [] })),
+          api.get('/masters/units?status=ACTIVE&all=true').catch(() => ({ records: [] })),
+          api.get('/masters/categories?status=ACTIVE&all=true').catch(() => ({ records: [] })),
+          api.get('/masters/projects?status=ACTIVE&all=true').catch(() => ({ records: [] })),
+          api.get('/masters/job-positions?status=ACTIVE&all=true').catch(() => ({ records: [] }))
         ]);
 
         if (compRes?.company) setCompany(compRes.company);
-        if (branchRes?.branches) {
-          setBranches(branchRes.branches);
-          if (branchRes.branches[0] && !formData.branchId) {
-            setFormData(prev => ({ ...prev, branchId: branchRes.branches[0].id }));
+        const branchList = branchRes?.records || branchRes?.branches || [];
+        if (branchList.length > 0) {
+          setBranches(branchList);
+          if (branchList[0] && !formData.branchId) {
+            setFormData(prev => ({ ...prev, branchId: branchList[0].id }));
           }
         }
-        if (deptRes?.departments) {
-          setDepartments(deptRes.departments);
-          if (deptRes.departments[0] && !formData.departmentId) {
-            setFormData(prev => ({ ...prev, departmentId: deptRes.departments[0].id }));
+        const deptList = deptRes?.records || deptRes?.departments || [];
+        if (deptList.length > 0) {
+          setDepartments(deptList);
+          if (deptList[0] && !formData.departmentId) {
+            setFormData(prev => ({ ...prev, departmentId: deptList[0].id }));
           }
         }
-        if (desigRes?.designations) {
-          setDesignations(desigRes.designations);
-          if (desigRes.designations[0] && !formData.designationId) {
-            setFormData(prev => ({ ...prev, designationId: desigRes.designations[0].id }));
+        const desigList = desigRes?.records || desigRes?.designations || [];
+        if (desigList.length > 0) {
+          setDesignations(desigList);
+          if (desigList[0] && !formData.designationId) {
+            setFormData(prev => ({ ...prev, designationId: desigList[0].id }));
           }
         }
-        if (jbRes?.jobBands) {
-          setJobBands(jbRes.jobBands);
-          if (jbRes.jobBands[0] && !formData.gradeId) {
-            setFormData(prev => ({ ...prev, gradeId: jbRes.jobBands[0].id }));
+        const jbList = jbRes?.records || jbRes?.jobBands || [];
+        if (jbList.length > 0) {
+          setJobBands(jbList);
+          if (jbList[0] && !formData.gradeId) {
+            setFormData(prev => ({ ...prev, gradeId: jbList[0].id }));
           }
         }
-        if (ccRes?.costCenters) {
-          setCostCenters(ccRes.costCenters);
-          if (ccRes.costCenters[0] && !formData.divisionId) {
-            setFormData(prev => ({ ...prev, divisionId: ccRes.costCenters[0].id }));
+        const ccList = ccRes?.records || ccRes?.costCenters || [];
+        if (ccList.length > 0) {
+          setCostCenters(ccList);
+          if (ccList[0] && !formData.divisionId) {
+            setFormData(prev => ({ ...prev, divisionId: ccList[0].id }));
           }
         }
+        if (unitRes?.records) setUnits(unitRes.records);
+        if (catRes?.records) setEmploymentCategories(catRes.records);
+        if (prjRes?.records) setProjects(prjRes.records);
+        if (posRes?.records) setJobPositions(posRes.records);
         if (cfRes?.fields) {
           setCustomFieldDefs(cfRes.fields);
         }
@@ -747,12 +764,22 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
               <div className="spine-org-row">
                 <span className="spine-org-label">Job Post Code *</span>
                 <div className="spine-org-input-wrapper">
-                  <input 
-                    type="text" 
+                  <select 
                     value={formData.jobPostCode} 
                     onChange={e => setFormData({ ...formData, jobPostCode: e.target.value })} 
-                    placeholder="Select"
-                  />
+                  >
+                    <option value="">Select Job Post Code</option>
+                    {jobPositions
+                      .filter(jp => !formData.departmentId || !jp.departmentId || jp.departmentId === formData.departmentId)
+                      .map(jp => (
+                        <option key={jp.id} value={jp.code}>
+                          {jp.code} - {jp.title}
+                        </option>
+                      ))}
+                    {formData.jobPostCode && !jobPositions.some(jp => jp.code === formData.jobPostCode) && (
+                      <option value={formData.jobPostCode}>{formData.jobPostCode}</option>
+                    )}
+                  </select>
                   <Search size={14} className="spine-org-search-icon" />
                 </div>
               </div>
@@ -865,9 +892,17 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                     value={formData.unit} 
                     onChange={e => setFormData({ ...formData, unit: e.target.value })}
                   >
-                    <option value="Corporate Unit 1">Corporate Unit 1</option>
-                    <option value="Manufacturing Unit 2">Manufacturing Unit 2</option>
-                    <option value="R&D Lab">R&D Lab</option>
+                    <option value="">Select Organizational Unit</option>
+                    {units
+                      .filter(u => !formData.branchId || !u.branchId || u.branchId === formData.branchId)
+                      .map(u => (
+                        <option key={u.id} value={u.name}>
+                          {u.name} ({u.code})
+                        </option>
+                      ))}
+                    {formData.unit && !units.some(u => u.name === formData.unit) && (
+                      <option value={formData.unit}>{formData.unit}</option>
+                    )}
                   </select>
                   <Search size={14} className="spine-org-search-icon" />
                 </div>
@@ -880,9 +915,15 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                     value={formData.category} 
                     onChange={e => setFormData({ ...formData, category: e.target.value })}
                   >
-                    <option value="Permanent Staff">Permanent Staff</option>
-                    <option value="Executive Officer">Executive Officer</option>
-                    <option value="Contractual Specialist">Contractual Specialist</option>
+                    <option value="">Select Category</option>
+                    {employmentCategories.map(cat => (
+                      <option key={cat.id} value={cat.name}>
+                        {cat.name} ({cat.code})
+                      </option>
+                    ))}
+                    {formData.category && !employmentCategories.some(c => c.name === formData.category) && (
+                      <option value={formData.category}>{formData.category}</option>
+                    )}
                   </select>
                   <Search size={14} className="spine-org-search-icon" />
                 </div>
@@ -895,9 +936,15 @@ export const ManageEmployeeView: React.FC<ManageEmployeeViewProps> = ({
                     value={formData.project} 
                     onChange={e => setFormData({ ...formData, project: e.target.value })}
                   >
-                    <option value="Internal Operations">Internal Operations</option>
-                    <option value="Product Engineering">Product Engineering</option>
-                    <option value="Client Services">Client Services</option>
+                    <option value="">Select Project</option>
+                    {projects.map(p => (
+                      <option key={p.id} value={p.name}>
+                        {p.name} ({p.code})
+                      </option>
+                    ))}
+                    {formData.project && !projects.some(p => p.name === formData.project) && (
+                      <option value={formData.project}>{formData.project}</option>
+                    )}
                   </select>
                   <Search size={14} className="spine-org-search-icon" />
                 </div>

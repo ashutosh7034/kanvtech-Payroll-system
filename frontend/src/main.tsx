@@ -22,6 +22,7 @@ import { PayrollPermissionsView } from './pages/PayrollPermissionsView';
 import { ManageEmployeeView } from './pages/ManageEmployeeView';
 import { MyLeaveView } from './pages/MyLeaveView';
 import { MyPayslipsView } from './pages/MyPayslipsView';
+import { MasterDataManagementView } from './pages/MasterDataManagementView';
 import { NotificationBell } from './components/NotificationBell';
 import { AccessDeniedView } from './components/common/AccessDeniedView';
 import { ErrorBoundary } from './components/common/ErrorBoundary';
@@ -47,7 +48,8 @@ import {
   Layers,
   ChevronDown,
   User,
-  FileText
+  FileText,
+  Database
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -118,6 +120,8 @@ const AppContent: React.FC = () => {
         return { section: 'Employee Portal', page: 'My Payslips' };
       case 'payroll-permissions':
         return { section: 'Access Control', page: 'Payroll Permissions Dashboard' };
+      case 'master-data':
+        return { section: 'System Administration', page: 'Master Data Management' };
       default:
         return { section: 'HRMS', page: currentPage };
     }
@@ -195,6 +199,7 @@ const AppContent: React.FC = () => {
               {
                 title: 'Access Control & Admin',
                 items: [
+                  { id: 'master-data', label: 'Master Data Management', icon: Database, permissionKey: 'admin', hideForSelfServiceOnly: true },
                   { id: 'payroll-permissions', label: 'Payroll Permissions', icon: Shield, permissionKey: 'rbac', hideForSelfServiceOnly: true }
                 ]
               }
@@ -433,6 +438,7 @@ const AppContent: React.FC = () => {
                 {currentPage === 'my-leave' && <MyLeaveView />}
                 {currentPage === 'my-payslips' && <MyPayslipsView />}
                 {currentPage === 'payroll-permissions' && <PayrollPermissionsView />}
+                {currentPage === 'master-data' && <MasterDataManagementView />}
               </>
             )}
           </ErrorBoundary>

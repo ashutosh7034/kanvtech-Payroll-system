@@ -167,6 +167,43 @@ async function main() {
     data: { companyId: company.id, code: 'CC-GNA', name: 'General & Administrative' }
   });
 
+  // 7b. Units, Categories, Projects, Job Positions
+  await prisma.orgUnit.createMany({
+    data: [
+      { companyId: company.id, branchId: bHeadquarters.id, code: 'UNIT-CORP-1', name: 'Corporate Unit 1', description: 'Central Executive & Corporate Operations Unit' },
+      { companyId: company.id, branchId: bBengaluru.id, code: 'UNIT-MFG-2', name: 'Manufacturing Unit 2', description: 'Industrial & Manufacturing Plant Operations' },
+      { companyId: company.id, branchId: bPune.id, code: 'UNIT-RD-LAB', name: 'R&D Lab', description: 'Advanced Research, AI & Prototyping Laboratory' }
+    ],
+    skipDuplicates: true
+  });
+
+  await prisma.employmentCategory.createMany({
+    data: [
+      { companyId: company.id, code: 'CAT-PERM', name: 'Permanent Staff', description: 'Regular Full-time Employees with standard benefits' },
+      { companyId: company.id, code: 'CAT-EXEC', name: 'Executive Officer', description: 'Senior Corporate Executives and C-Suite Leadership' },
+      { companyId: company.id, code: 'CAT-CONT', name: 'Contractual Specialist', description: 'Fixed-term contract specialists and technical consultants' }
+    ],
+    skipDuplicates: true
+  });
+
+  await prisma.project.createMany({
+    data: [
+      { companyId: company.id, code: 'PRJ-OPS', name: 'Internal Operations', clientName: 'Apex Internal', status: 'ACTIVE' },
+      { companyId: company.id, code: 'PRJ-ENG', name: 'Product Engineering', clientName: 'Platform Products', status: 'ACTIVE' },
+      { companyId: company.id, code: 'PRJ-CS', name: 'Client Services', clientName: 'Enterprise Client Advisory', status: 'ACTIVE' }
+    ],
+    skipDuplicates: true
+  });
+
+  await prisma.jobPosition.createMany({
+    data: [
+      { companyId: company.id, departmentId: deptEng.id, designationId: desSrEng.id, gradeId: bandL2.id, code: 'SE-2026', title: 'Senior Software Engineer (2026)', description: 'Lead enterprise payroll application backend & cloud engineering' },
+      { companyId: company.id, departmentId: deptPrd.id, designationId: desLeadDes.id, gradeId: bandL3.id, code: 'PM-2026', title: 'Product Manager (2026)', description: 'Core HRMS & statutory compliance product manager' },
+      { companyId: company.id, departmentId: deptEng.id, designationId: desSrEng.id, gradeId: bandL2.id, code: 'QA-2026', title: 'QA Automation Lead (2026)', description: 'End-to-end regression testing and test infrastructure lead' }
+    ],
+    skipDuplicates: true
+  });
+
   // 8. Statutory Configuration & PT Slabs
   await prisma.statutoryConfig.create({
     data: {

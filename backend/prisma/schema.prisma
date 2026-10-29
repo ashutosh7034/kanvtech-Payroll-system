@@ -212,6 +212,9 @@ model Company {
   auditLogs       AuditLog[]
   customFields    CustomFieldDefinition[]
   notifications   InAppNotification[]
+  orgUnits        OrgUnit[]
+  employmentCategories EmploymentCategory[]
+  jobPositions    JobPosition[]
 }
 
 model Branch {
@@ -230,6 +233,7 @@ model Branch {
   updatedAt       DateTime    @updatedAt
 
   employees       Employee[]
+  orgUnits        OrgUnit[]
 
   @@unique([companyId, code])
 }
@@ -246,6 +250,7 @@ model Department {
 
   employees       Employee[]
   jobOpenings     JobOpening[]
+  jobPositions    JobPosition[]
 
   @@unique([companyId, code])
 }
@@ -262,6 +267,7 @@ model Designation {
 
   employees       Employee[]
   jobOpenings     JobOpening[]
+  jobPositions    JobPosition[]
 
   @@unique([companyId, code])
 }
@@ -274,9 +280,11 @@ model JobBand {
   name            String
   minCtc          Decimal     @default(0) @db.Decimal(18, 2)
   maxCtc          Decimal     @default(0) @db.Decimal(18, 2)
+  active          Boolean     @default(true)
   createdAt       DateTime    @default(now())
 
   employees       Employee[]
+  jobPositions    JobPosition[]
 
   @@unique([companyId, code])
 }
@@ -291,6 +299,56 @@ model CostCenter {
   createdAt       DateTime    @default(now())
 
   employees       Employee[]
+
+  @@unique([companyId, code])
+}
+
+model OrgUnit {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branchId        String?
+  branch          Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  code            String
+  name            String
+  description     String?
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([companyId, code])
+}
+
+model EmploymentCategory {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  code            String
+  name            String
+  description     String?
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@unique([companyId, code])
+}
+
+model JobPosition {
+  id              String      @id @default(uuid())
+  companyId       String
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departmentId    String?
+  department      Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designationId   String?
+  designation     Designation? @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  gradeId         String?
+  grade           JobBand?    @relation(fields: [gradeId], references: [id], onDelete: SetNull)
+  code            String
+  title           String
+  description     String?
+  active          Boolean     @default(true)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
 
   @@unique([companyId, code])
 }
@@ -407,6 +465,11 @@ model Employee {
   confirmationDate DateTime?
   noticePeriodDays Int              @default(60)
   exitDate        DateTime?
+
+  jobPostCode     String?
+  unit            String?
+  category        String?
+  project         String?
 
   panNumber       String?
   uanNumber       String?
@@ -744,6 +807,7 @@ model ShiftPolicy {
   graceMinutes    Int             @default(15)
   halfDayMinutes  Int             @default(240)
   fullDayMinutes  Int             @default(480)
+  active          Boolean         @default(true)
   createdAt       DateTime        @default(now())
 
   dailyAttendances DailyAttendance[]
@@ -832,6 +896,7 @@ model LeavePolicy {
   applicableGender    String          @default("ALL")
   accrualFrequency    String          @default("ANNUAL")
   description         String?
+  active              Boolean         @default(true)
   createdAt           DateTime        @default(now())
 
   balances            EmployeeLeaveBalance[]
@@ -1061,6 +1126,7 @@ model ExpenseCategory {
   name            String
   maxLimit        Decimal?        @db.Decimal(18, 2)
   requiresReceipt Boolean         @default(true)
+  active          Boolean         @default(true)
 
   items           ExpenseItem[]
 
@@ -1125,6 +1191,7 @@ model Project {
   name            String
   clientName      String?
   status          String          @default("ACTIVE")
+  active          Boolean         @default(true)
   createdAt       DateTime        @default(now())
 
   allocations     ProjectAllocation[]
@@ -1261,6 +1328,7 @@ model LoanType {
   minInterestRatePct Decimal         @default(0) @db.Decimal(5, 2)
   maxInterestRatePct Decimal         @default(36) @db.Decimal(5, 2)
   allowRateOverride  Boolean         @default(true)
+  active             Boolean         @default(true)
 
   loans              EmployeeLoan[]
 
@@ -1340,6 +1408,7 @@ model HelpDeskCategory {
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name            String
   slaHours        Int             @default(24)
+  active          Boolean         @default(true)
 
   tickets         HelpDeskTicket[]
 

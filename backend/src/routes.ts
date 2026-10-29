@@ -18,6 +18,7 @@ import { corporateReportRouter } from './modules/reports/corporateReport.routes.
 import { loanRouter } from './modules/loans/loans.routes.js';
 import { notificationRouter } from './modules/notifications/notification.routes.js';
 import { rbacRouter } from './modules/rbac/rbac.routes.js';
+import { mastersRouter } from './modules/masters/masters.routes.js';
 
 export const apiRouter = Router();
 
@@ -40,3 +41,4 @@ apiRouter.use('/reports', corporateReportRouter);
 apiRouter.use('/loans', loanRouter);
 apiRouter.use('/notifications', notificationRouter);
 apiRouter.use('/rbac', rbacRouter);
+apiRouter.use('/masters', mastersRouter);
