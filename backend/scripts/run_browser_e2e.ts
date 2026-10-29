@@ -130,14 +130,16 @@ async function runBrowserE2E() {
       else throw new Error(`Initialize button not found; available buttons: ${btns.map(b => b.textContent?.trim()).join(', ')}`);
     });
 
-    // Wait for modal dialog and preview data to finish loading
+    // Wait for modal dialog and candidate data to arrive
     await page.waitForSelector('.modal-dialog');
     await page.waitForFunction(() => {
-      const text = document.body.innerText;
-      return text.includes('Initialize Department / Group Payroll Run') &&
-             !text.includes('Scanning employee master');
+      const modal = document.querySelector('.modal-dialog');
+      if (!modal) return false;
+      const text = modal.textContent || '';
+      return text.includes('All employees in this selection have already been processed') ||
+             modal.querySelectorAll('.data-table tbody tr').length > 0;
     }, { timeout: 10000 });
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 300));
 
     // Verify January 2026 state
     const modalContent = await page.evaluate(() => {
@@ -194,7 +196,13 @@ async function runBrowserE2E() {
     }
 
     await page.select('.modal-dialog select', febOptionValue);
-    await new Promise(r => setTimeout(r, 800));
+    // Wait for February preview candidates to arrive and render in table
+    await page.waitForFunction(() => {
+      const modal = document.querySelector('.modal-dialog');
+      const checkboxes = modal?.querySelectorAll('.data-table tbody input[type="checkbox"]:not(:disabled)');
+      return checkboxes && checkboxes.length > 0;
+    }, { timeout: 10000 });
+    await new Promise(r => setTimeout(r, 300));
 
     // Verify February candidate counts
     const febState = await page.evaluate(() => {
@@ -224,19 +232,19 @@ async function runBrowserE2E() {
     // Test Search input
     const searchInput = await page.waitForSelector('.modal-dialog input[placeholder*="Search"]');
     await searchInput!.type('Rohit');
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300));
 
     const searchCount = await page.evaluate(() => {
-      return document.querySelectorAll('.data-table tbody tr').length;
+      return document.querySelectorAll('.modal-dialog .data-table tbody tr').length;
     });
-    console.log(`Search for "Rohit" displayed ${searchCount} row(s)`);
+    console.log(`Search for "Rohit" displayed ${searchCount} row(s) in modal table`);
     if (searchCount !== 1) {
-      throw new Error(`Expected exactly 1 row for search "Rohit", got ${searchCount}`);
+      throw new Error(`Expected exactly 1 row for search "Rohit" in modal, got ${searchCount}`);
     }
 
     // Clear search
-    await page.click('button[title="Clear search"]');
-    await new Promise(r => setTimeout(r, 200));
+    await page.click('.modal-dialog button[title="Clear search"]');
+    await new Promise(r => setTimeout(r, 300));
 
     // Test Deselect All
     await page.evaluate(() => {
@@ -244,11 +252,11 @@ async function runBrowserE2E() {
       const deselect = btns.find(b => b.textContent?.includes('Deselect All'));
       if (deselect) deselect.click();
     });
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300));
 
     const afterDeselect = await page.evaluate(() => {
       const submitBtn = document.querySelector('.modal-dialog button[type="submit"]') as HTMLButtonElement | null;
-      const checked = document.querySelectorAll('.data-table tbody input[type="checkbox"]:checked').length;
+      const checked = document.querySelectorAll('.modal-dialog .data-table tbody input[type="checkbox"]:checked').length;
       return { isSubmitDisabled: submitBtn ? submitBtn.disabled : true, checked };
     });
     if (afterDeselect.checked !== 0 || !afterDeselect.isSubmitDisabled) {
@@ -261,11 +269,11 @@ async function runBrowserE2E() {
       const selectAll = btns.find(b => b.textContent?.includes('Select All Eligible'));
       if (selectAll) selectAll.click();
     });
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 300));
 
     const afterSelectAll = await page.evaluate(() => {
       const submitBtn = document.querySelector('.modal-dialog button[type="submit"]') as HTMLButtonElement | null;
-      const checked = document.querySelectorAll('.data-table tbody input[type="checkbox"]:checked').length;
+      const checked = document.querySelectorAll('.modal-dialog .data-table tbody input[type="checkbox"]:checked').length;
       return { isSubmitDisabled: submitBtn ? submitBtn.disabled : true, checked };
     });
     if (afterSelectAll.checked === 0 || afterSelectAll.isSubmitDisabled) {
