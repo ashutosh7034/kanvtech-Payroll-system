@@ -9,8 +9,15 @@ import { MasterCategoryKey } from './masters.types.js';
 export const mastersRouter = Router();
 
 // Helper to get Prisma delegate safely by category key
+function resolveCategoryKey(rawKey: string | string[]): MasterCategoryKey {
+  const key = Array.isArray(rawKey) ? rawKey[0] : rawKey;
+  if (key === 'employment-categories') return 'categories';
+  return key as MasterCategoryKey;
+}
+
 function getPrismaDelegate(categoryKey: MasterCategoryKey): any {
-  const config = MASTER_CONFIGS[categoryKey];
+  const normalizedKey = resolveCategoryKey(categoryKey);
+  const config = MASTER_CONFIGS[normalizedKey];
   if (!config) throw new AppError(`Invalid master category '${categoryKey}'`, 400);
   const delegate = (prisma as any)[config.model];
   if (!delegate) throw new AppError(`Prisma model '${config.model}' not found`, 500);
@@ -18,7 +25,12 @@ function getPrismaDelegate(categoryKey: MasterCategoryKey): any {
 }
 
 // 1. Overview of all Master Categories with live tenant record counts
+// If query parameters (status, page, all, search, limit) are supplied, fall through to query records for 'categories'
 mastersRouter.get('/categories', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  if (req.query.status || req.query.page || req.query.all || req.query.search || req.query.limit) {
+    return next();
+  }
+
   try {
     const companyId = req.user!.companyId;
     const categoryKeys = Object.keys(MASTER_CONFIGS) as MasterCategoryKey[];
@@ -70,7 +82,7 @@ mastersRouter.get('/categories', authenticate, async (req: Request, res: Respons
 // 2. Query paginated records for a specific master category
 mastersRouter.get('/:category', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
 
@@ -166,7 +178,7 @@ mastersRouter.get('/:category', authenticate, async (req: Request, res: Response
 // 3. Get single master record
 mastersRouter.get('/:category/:id', authenticate, async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const recordId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
@@ -191,7 +203,7 @@ mastersRouter.get('/:category/:id', authenticate, async (req: Request, res: Resp
 // 4. Create master record
 mastersRouter.post('/:category', authenticate, requireRole(['company_admin', 'platform_admin', 'hr_manager', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
     if (!config.canCreate) throw new AppError(`Creating new ${config.label} records is not permitted via this interface`, 403);
@@ -247,7 +259,7 @@ mastersRouter.post('/:category', authenticate, requireRole(['company_admin', 'pl
 // 5. Update master record
 mastersRouter.patch('/:category/:id', authenticate, requireRole(['company_admin', 'platform_admin', 'hr_manager', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const recordId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
@@ -309,7 +321,7 @@ mastersRouter.patch('/:category/:id', authenticate, requireRole(['company_admin'
 // 6. Toggle Active / Inactive Status
 mastersRouter.patch('/:category/:id/status', authenticate, requireRole(['company_admin', 'platform_admin', 'hr_manager', 'payroll_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const recordId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
@@ -364,7 +376,7 @@ mastersRouter.patch('/:category/:id/status', authenticate, requireRole(['company
 // 7. Delete master record (Strict Referential Integrity Guard)
 mastersRouter.delete('/:category/:id', authenticate, requireRole(['company_admin', 'platform_admin']), async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const categoryKey = req.params.category as MasterCategoryKey;
+    const categoryKey = resolveCategoryKey(req.params.category);
     const recordId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
     const config = MASTER_CONFIGS[categoryKey];
     if (!config) throw new AppError(`Invalid master category '${req.params.category}'`, 400);
