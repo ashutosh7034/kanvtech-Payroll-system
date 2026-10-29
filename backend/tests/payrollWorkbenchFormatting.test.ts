@@ -72,6 +72,13 @@ describe('7-Stage Payroll Workbench Formatting & Review Table Regression Suite',
       expect(formatCurrency('45000.75')).toBe('₹45,000.75');
     });
 
+    it('7b. handles maximumFractionDigits: 0 without throwing RangeError (maximumFractionDigits value is out of range)', () => {
+      expect(formatCurrency(12500, { maximumFractionDigits: 0 })).toBe('₹12,500');
+      expect(formatAmount(12500, { maximumFractionDigits: 0 })).toBe('12,500');
+      expect(formatCurrency(0, { maximumFractionDigits: 0 })).toBe('₹0');
+      expect(formatCurrency('12500.50', { maximumFractionDigits: 0 })).toBe('₹12,501');
+    });
+
     it('8. formats integers and headcounts safely', () => {
       expect(formatInteger(25)).toBe('25');
       expect(formatInteger(0)).toBe('0');

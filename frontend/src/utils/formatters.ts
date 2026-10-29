@@ -18,7 +18,7 @@ export function formatAmount(
   value: number | string | null | undefined,
   options: FormatAmountOptions = {}
 ): string {
-  const {
+  let {
     minimumFractionDigits = 2,
     maximumFractionDigits = 2,
     fallback = '—',
@@ -35,12 +35,27 @@ export function formatAmount(
     return fallback;
   }
 
-  const formatted = amount.toLocaleString('en-IN', {
-    minimumFractionDigits,
-    maximumFractionDigits,
-  });
+  // In Intl.NumberFormat, minimumFractionDigits must be <= maximumFractionDigits.
+  // If the caller provided maximumFractionDigits without specifying minimumFractionDigits,
+  // clamp minimumFractionDigits to maximumFractionDigits.
+  if (options.maximumFractionDigits !== undefined && options.minimumFractionDigits === undefined) {
+    minimumFractionDigits = Math.min(minimumFractionDigits, options.maximumFractionDigits);
+  }
+  if (minimumFractionDigits > maximumFractionDigits) {
+    minimumFractionDigits = maximumFractionDigits;
+  }
 
-  return currencyPrefix ? `₹${formatted}` : formatted;
+  try {
+    const formatted = amount.toLocaleString('en-IN', {
+      minimumFractionDigits,
+      maximumFractionDigits,
+    });
+
+    return currencyPrefix ? `₹${formatted}` : formatted;
+  } catch {
+    const safeDigits = Math.max(0, Math.min(20, maximumFractionDigits));
+    return currencyPrefix ? `₹${amount.toFixed(safeDigits)}` : amount.toFixed(safeDigits);
+  }
 }
 
 /**
@@ -78,6 +93,10 @@ export function formatPercentage(
   if (value === null || value === undefined || value === '') return fallback;
   const num = typeof value === 'number' ? value : Number(value);
   if (!Number.isFinite(num)) return fallback;
-  return `${num.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`;
+  try {
+    return `${num.toLocaleString('en-IN', { minimumFractionDigits: 1, maximumFractionDigits: 2 })}%`;
+  } catch {
+    return `${num.toFixed(2)}%`;
+  }
 }
 
