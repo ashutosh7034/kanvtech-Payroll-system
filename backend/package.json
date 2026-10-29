@@ -9,6 +9,7 @@
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --fileParallelism=false",
+    "test:e2e": "tsx scripts/run_browser_e2e.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "seed": "tsx prisma/seed.ts"
@@ -36,6 +37,7 @@
     "@types/pdfkit": "^0.17.6",
     "@types/supertest": "^6.0.2",
     "prisma": "^6.16.0",
+    "puppeteer-core": "^25.16.0",
     "supertest": "^7.0.0",
     "tsx": "^4.20.5",
     "typescript": "^5.8.2",

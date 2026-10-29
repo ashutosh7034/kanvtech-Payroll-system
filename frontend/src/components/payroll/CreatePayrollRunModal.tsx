@@ -67,23 +67,25 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Sync initial period
+  // Sync initial period whenever modal opens or periods/initialPeriodId become available
   useEffect(() => {
-    if (initialPeriodId) {
-      setSelectedPeriodId(initialPeriodId);
-    } else if (periods.length > 0 && !selectedPeriodId) {
-      setSelectedPeriodId(periods[0].id);
+    if (isOpen) {
+      const activeId = initialPeriodId || (periods[0]?.id || '');
+      if (activeId && (!selectedPeriodId || !periods.some(p => p.id === selectedPeriodId))) {
+        setSelectedPeriodId(activeId);
+      }
     }
-  }, [initialPeriodId, periods]);
+  }, [isOpen, initialPeriodId, periods]);
 
   // Fetch preview when filters change
-  const fetchPreview = async () => {
-    if (!selectedPeriodId) return;
+  const fetchPreview = async (periodIdToFetch?: string) => {
+    const periodId = periodIdToFetch || selectedPeriodId;
+    if (!periodId) return;
     setLoadingPreview(true);
     setError(null);
     try {
       const params = new URLSearchParams();
-      params.append('periodId', selectedPeriodId);
+      params.append('periodId', periodId);
       if (selectedDepartmentId !== 'ALL') params.append('departmentId', selectedDepartmentId);
       if (selectedBranchId !== 'ALL') params.append('branchId', selectedBranchId);
 
@@ -108,8 +110,12 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
   };
 
   useEffect(() => {
-    if (isOpen && selectedPeriodId) {
-      fetchPreview();
+    if (isOpen) {
+      const targetPeriodId = selectedPeriodId || initialPeriodId || periods[0]?.id;
+      if (targetPeriodId) {
+        if (!selectedPeriodId) setSelectedPeriodId(targetPeriodId);
+        fetchPreview(targetPeriodId);
+      }
     }
   }, [isOpen, selectedPeriodId, selectedDepartmentId, selectedBranchId]);
 

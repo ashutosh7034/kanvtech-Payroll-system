@@ -1937,7 +1937,7 @@ export const PayrollProcessingView: React.FC = () => {
         isOpen={showGenerateModal}
         onClose={() => setShowGenerateModal(false)}
         periods={periods}
-        initialPeriodId={selectedPeriodId}
+        initialPeriodId={selectedPeriodId || periods[0]?.id}
         onViewRun={(runId) => {
           setShowGenerateModal(false);
           viewRunDetails(runId);
