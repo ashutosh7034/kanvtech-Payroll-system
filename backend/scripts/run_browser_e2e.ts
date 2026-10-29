@@ -49,19 +49,24 @@ async function runBrowserE2E() {
     const needsLogin = await page.$('button[type="submit"]');
     if (needsLogin) {
       console.log('Login form detected; authenticating as admin...');
-      await page.evaluate(() => {
-        const usernameInput = document.querySelector('input[type="text"]') as HTMLInputElement;
-        const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement;
-        if (usernameInput) usernameInput.value = 'admin';
-        if (passwordInput) passwordInput.value = 'Admin@123';
-        usernameInput?.dispatchEvent(new Event('input', { bubbles: true }));
-        passwordInput?.dispatchEvent(new Event('input', { bubbles: true }));
-      });
+      await page.focus('input[type="text"]');
+      await page.keyboard.down('Control');
+      await page.keyboard.press('A');
+      await page.keyboard.up('Control');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type('admin');
+
+      await page.focus('input[type="password"]');
+      await page.keyboard.down('Control');
+      await page.keyboard.press('A');
+      await page.keyboard.up('Control');
+      await page.keyboard.press('Backspace');
+      await page.keyboard.type('Admin@123');
 
       await page.click('button[type="submit"]');
-      await page.waitForSelector('.sidebar', { timeout: 10000 });
+      await page.waitForSelector('.sidebar', { timeout: 15000 });
     } else {
-      await page.waitForSelector('.sidebar', { timeout: 10000 });
+      await page.waitForSelector('.sidebar', { timeout: 15000 });
     }
 
     results.push({

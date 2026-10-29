@@ -18,9 +18,7 @@ export function formatAmount(
   value: number | string | null | undefined,
   options: FormatAmountOptions = {}
 ): string {
-  let {
-    minimumFractionDigits = 2,
-    maximumFractionDigits = 2,
+  const {
     fallback = '—',
     currencyPrefix = false
   } = options;
@@ -35,26 +33,37 @@ export function formatAmount(
     return fallback;
   }
 
-  // In Intl.NumberFormat, minimumFractionDigits must be <= maximumFractionDigits.
-  // If the caller provided maximumFractionDigits without specifying minimumFractionDigits,
-  // clamp minimumFractionDigits to maximumFractionDigits.
-  if (options.maximumFractionDigits !== undefined && options.minimumFractionDigits === undefined) {
-    minimumFractionDigits = Math.min(minimumFractionDigits, options.maximumFractionDigits);
-  }
-  if (minimumFractionDigits > maximumFractionDigits) {
-    minimumFractionDigits = maximumFractionDigits;
-  }
-
   try {
+    let minDigits = options.minimumFractionDigits !== undefined && Number.isFinite(options.minimumFractionDigits)
+      ? Math.floor(options.minimumFractionDigits)
+      : 2;
+    let maxDigits = options.maximumFractionDigits !== undefined && Number.isFinite(options.maximumFractionDigits)
+      ? Math.floor(options.maximumFractionDigits)
+      : 2;
+
+    minDigits = Math.max(0, Math.min(20, minDigits));
+    maxDigits = Math.max(0, Math.min(20, maxDigits));
+
+    if (options.maximumFractionDigits !== undefined && options.minimumFractionDigits === undefined) {
+      minDigits = Math.min(minDigits, maxDigits);
+    }
+    if (minDigits > maxDigits) {
+      minDigits = maxDigits;
+    }
+
     const formatted = amount.toLocaleString('en-IN', {
-      minimumFractionDigits,
-      maximumFractionDigits,
+      minimumFractionDigits: minDigits,
+      maximumFractionDigits: maxDigits,
     });
 
     return currencyPrefix ? `₹${formatted}` : formatted;
   } catch {
-    const safeDigits = Math.max(0, Math.min(20, maximumFractionDigits));
-    return currencyPrefix ? `₹${amount.toFixed(safeDigits)}` : amount.toFixed(safeDigits);
+    try {
+      const fallbackDigits = Math.max(0, Math.min(20, options.maximumFractionDigits ?? 2));
+      return currencyPrefix ? `₹${amount.toFixed(fallbackDigits)}` : amount.toFixed(fallbackDigits);
+    } catch {
+      return currencyPrefix ? `₹${amount}` : String(amount);
+    }
   }
 }
 
