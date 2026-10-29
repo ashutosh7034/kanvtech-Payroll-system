@@ -716,7 +716,7 @@ export const PayrollProcessingView: React.FC = () => {
             <div style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '12px' }}>
               7-Stage Payroll Lifecycle Progression
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px' }}>
+            <div className="payroll-stepper-grid">
               {SEVEN_STAGES.map((s, idx) => {
                 const isPassed = currentStageIndex > idx;
                 const isCurrent = currentStageIndex === idx;

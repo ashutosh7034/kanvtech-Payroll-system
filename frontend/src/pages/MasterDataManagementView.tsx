@@ -470,7 +470,7 @@ export const MasterDataManagementView: React.FC = () => {
           </div>
 
           {/* Categories Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '18px' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(100%, 280px), 1fr))', gap: '18px' }}>
             {filteredCategories.map(cat => {
               const IconComponent = ICON_MAP[cat.icon] || Database;
               return (

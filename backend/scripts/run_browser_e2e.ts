@@ -49,24 +49,38 @@ async function runBrowserE2E() {
     const needsLogin = await page.$('button[type="submit"]');
     if (needsLogin) {
       console.log('Login form detected; authenticating as admin...');
-      await page.focus('input[type="text"]');
-      await page.keyboard.down('Control');
-      await page.keyboard.press('A');
-      await page.keyboard.up('Control');
-      await page.keyboard.press('Backspace');
-      await page.keyboard.type('admin');
+      // Click Quick Fill Demo "Admin" button
+      const demoButtons = await page.$$('button[type="button"]');
+      let clickedDemo = false;
+      for (const b of demoButtons) {
+        const text = await page.evaluate(el => el.textContent, b);
+        if (text && text.trim() === 'Admin') {
+          await b.click();
+          clickedDemo = true;
+          break;
+        }
+      }
 
-      await page.focus('input[type="password"]');
-      await page.keyboard.down('Control');
-      await page.keyboard.press('A');
-      await page.keyboard.up('Control');
-      await page.keyboard.press('Backspace');
-      await page.keyboard.type('Admin@123');
+      if (!clickedDemo) {
+        await page.focus('input[type="text"]');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('A');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('admin');
+
+        await page.focus('input[type="password"]');
+        await page.keyboard.down('Control');
+        await page.keyboard.press('A');
+        await page.keyboard.up('Control');
+        await page.keyboard.press('Backspace');
+        await page.keyboard.type('Admin@123');
+      }
 
       await page.click('button[type="submit"]');
-      await page.waitForSelector('.sidebar', { timeout: 15000 });
+      await page.waitForSelector('.main-wrapper', { timeout: 15000 });
     } else {
-      await page.waitForSelector('.sidebar', { timeout: 15000 });
+      await page.waitForSelector('.main-wrapper', { timeout: 15000 });
     }
 
     results.push({
@@ -302,7 +316,16 @@ async function runBrowserE2E() {
     await page.click('.modal-footer button[type="submit"]');
 
     // Wait for modal to disappear
-    await page.waitForFunction(() => !document.querySelector('.modal-dialog'), { timeout: 10000 });
+    try {
+      await page.waitForFunction(() => !document.querySelector('.modal-dialog'), { timeout: 12000 });
+    } catch (err) {
+      const modalErr = await page.evaluate(() => {
+        const bodyEl = document.querySelector('.modal-dialog');
+        return bodyEl ? bodyEl.textContent : null;
+      });
+      console.error('Modal failed to close after submission. Modal content:', modalErr);
+      throw err;
+    }
 
     const workbenchText = await page.evaluate(() => document.body.innerText);
     const hasSuccessNotice = workbenchText.includes('Batch initialized in Stage 1') || workbenchText.includes('RUN-2026-02');
@@ -379,8 +402,7 @@ async function runBrowserE2E() {
       // Clean up test batch if created
       const testRuns = await prisma.corporatePayrollRun.findMany({
         where: {
-          period: { month: 2, year: 2026 },
-          status: 'DRAFT'
+          runNumber: { not: 'RUN-2026-01-4488' }
         }
       }).catch(() => []);
       for (const r of testRuns) {

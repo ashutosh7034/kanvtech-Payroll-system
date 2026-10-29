@@ -49,7 +49,9 @@ import {
   ChevronDown,
   User,
   FileText,
-  Database
+  Database,
+  Menu,
+  X
 } from 'lucide-react';
 
 const AppContent: React.FC = () => {
@@ -57,6 +59,7 @@ const AppContent: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>('dashboard');
   const [manageEmployeeId, setManageEmployeeId] = useState<string | null>(null);
   const [profileMenuOpen, setProfileMenuOpen] = useState<boolean>(false);
+  const [mobileNavOpen, setMobileNavOpen] = useState<boolean>(false);
 
   if (isLoading) {
     return (
@@ -131,14 +134,31 @@ const AppContent: React.FC = () => {
 
   return (
     <div className="app-layout">
+      {/* Mobile Backdrop Overlay */}
+      {mobileNavOpen && (
+        <div
+          className="sidebar-backdrop active"
+          onClick={() => setMobileNavOpen(false)}
+          aria-label="Close navigation overlay"
+        />
+      )}
+
       {/* Sidebar Navigation */}
-      <aside className="sidebar">
+      <aside className={`sidebar ${mobileNavOpen ? 'open' : ''}`}>
         <div className="sidebar-header">
           <div className="brand-badge">PF</div>
           <div className="brand-info">
             <h2>PayFlow</h2>
             <p>Corporate HRMS & Payroll</p>
           </div>
+          <button
+            type="button"
+            className="sidebar-close-btn"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation drawer"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="sidebar-nav" aria-label="Main Application Navigation">
@@ -235,11 +255,15 @@ const AppContent: React.FC = () => {
                       role="button"
                       tabIndex={0}
                       aria-current={isActive ? 'page' : undefined}
-                      onClick={() => setCurrentPage(item.id)}
+                      onClick={() => {
+                        setCurrentPage(item.id);
+                        setMobileNavOpen(false);
+                      }}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' || e.key === ' ') {
                           e.preventDefault();
                           setCurrentPage(item.id);
+                          setMobileNavOpen(false);
                         }
                       }}
                     >
@@ -257,9 +281,17 @@ const AppContent: React.FC = () => {
         {/* Topbar Header */}
         <header className="topbar">
           <div className="topbar-left">
+            <button
+              type="button"
+              className="mobile-nav-toggle"
+              onClick={() => setMobileNavOpen(prev => !prev)}
+              aria-label="Toggle navigation menu"
+            >
+              <Menu size={20} />
+            </button>
             <div className="breadcrumb-trail">
               <span className="breadcrumb-item">{breadcrumb.section}</span>
-              <ChevronRight size={12} />
+              <ChevronRight size={12} className="breadcrumb-separator" />
               <span className="breadcrumb-current">{breadcrumb.page}</span>
             </div>
           </div>
@@ -304,7 +336,7 @@ const AppContent: React.FC = () => {
                 >
                   {user.fullName ? user.fullName[0].toUpperCase() : 'U'}
                 </div>
-                <span>{user.fullName}</span>
+                <span className="user-fullname-desktop">{user.fullName}</span>
                 <ChevronDown size={14} style={{ color: 'var(--text-muted)' }} />
               </button>
 

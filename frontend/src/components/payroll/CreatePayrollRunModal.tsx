@@ -490,7 +490,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
             </div>
 
             {/* Candidate Employee Preview Table */}
-            <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', maxHeight: '280px', overflowY: 'auto' }}>
+            <div className="table-container" style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', maxHeight: '280px', overflowY: 'auto', overflowX: 'auto' }}>
               {loadingPreview ? (
                 <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                   Scanning employee master & CTC configurations...
