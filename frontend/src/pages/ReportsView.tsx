@@ -16,15 +16,12 @@ export const ReportsView: React.FC = () => {
   useEffect(() => {
     const loadPeriods = async () => {
       try {
-        const fyRes: any = await api.get('/masters/financial-years');
-        const activeFy = fyRes.financialYears.find((f: any) => f.active) || fyRes.financialYears[0];
-        if (activeFy) {
-          const pRes: any = await api.get(`/masters/financial-years/${activeFy.id}/periods`);
-          setPeriods(pRes.periods || []);
-          if (pRes.periods?.[0]) setSelectedPeriodId(pRes.periods[0].id);
-        }
+        const pRes: any = await api.get('/payroll/periods').catch(() => ({ periods: [] }));
+        const list = pRes.periods || [];
+        setPeriods(list);
+        if (list[0]) setSelectedPeriodId(list[0].id);
       } catch (err) {
-        console.error('Failed to load financial year periods:', err);
+        console.error('Failed to load payroll periods:', err);
       }
     };
     loadPeriods();

@@ -66,12 +66,12 @@ export const MyLeaveView: React.FC = () => {
       setLoading(true);
       const [balRes, polRes, reqRes]: any = await Promise.all([
         api.get('/leave/balances'),
-        api.get('/leave/policies'),
+        api.get('/masters/leave-policies?status=ACTIVE&all=true').catch(() => api.get('/leave/policies')),
         api.get('/leave/applications')
       ]);
 
       const loadedBalances = balRes.balances || [];
-      const loadedPolicies = polRes.policies || [];
+      const loadedPolicies = polRes.records || polRes.policies || [];
       const loadedRequests = reqRes.applications || reqRes.requests || [];
 
       setBalances(loadedBalances);

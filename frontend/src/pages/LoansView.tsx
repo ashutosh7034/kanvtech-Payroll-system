@@ -115,12 +115,12 @@ export const LoansView: React.FC = () => {
     try {
       const [lRes, tRes, empRes]: any = await Promise.all([
         api.get('/loans'),
-        api.get('/loans/types'),
+        api.get('/masters/loan-types?status=ACTIVE&all=true').catch(() => api.get('/loans/types')),
         api.get('/employees')
       ]);
 
       const fetchedLoans = lRes.loans || [];
-      const fetchedTypes = tRes.types || tRes.loanTypes || [];
+      const fetchedTypes = tRes.records || tRes.types || tRes.loanTypes || [];
       const fetchedEmps = empRes.employees || [];
 
       setLoans(fetchedLoans);

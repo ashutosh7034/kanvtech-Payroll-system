@@ -62,15 +62,16 @@ export const AssetsHelpDeskView: React.FC = () => {
       const [assetRes, ticketRes, catRes, empRes]: any = await Promise.all([
         api.get('/assets').catch(() => ({ assets: [] })),
         api.get('/helpdesk/tickets').catch(() => ({ tickets: [] })),
-        api.get('/helpdesk/categories').catch(() => ({ categories: [] })),
+        api.get('/masters/helpdesk-categories?status=ACTIVE&all=true').catch(() => api.get('/helpdesk/categories')).catch(() => ({ categories: [] })),
         api.get('/employees').catch(() => ({ employees: [] }))
       ]);
       setAssets(assetRes.assets || []);
       setTickets(ticketRes.tickets || []);
-      setCategories(catRes.categories || []);
+      const categoryList = catRes.records || catRes.categories || [];
+      setCategories(categoryList);
       setEmployees(empRes.employees || []);
-      if (catRes.categories && catRes.categories.length > 0 && !ticketCategoryId) {
-        setTicketCategoryId(catRes.categories[0].id);
+      if (categoryList.length > 0 && !ticketCategoryId) {
+        setTicketCategoryId(categoryList[0].id);
       }
       if (empRes.employees && empRes.employees.length > 0 && !allocateEmployeeId) {
         setAllocateEmployeeId(empRes.employees[0].id);

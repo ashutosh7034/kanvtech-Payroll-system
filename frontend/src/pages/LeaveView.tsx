@@ -95,15 +95,17 @@ export const LeaveView: React.FC = () => {
     try {
       setLoadingPolicies(true);
       const [polRes, depRes, empRes]: any = await Promise.all([
-        api.get('/leave/policies'),
-        api.get('/org/departments').catch(() => ({ departments: [] })),
+        api.get('/masters/leave-policies?status=ACTIVE&all=true').catch(() => api.get('/leave/policies')),
+        api.get('/masters/departments?status=ACTIVE&all=true').catch(() => api.get('/org/departments')).catch(() => ({ departments: [] })),
         api.get('/employees').catch(() => ({ employees: [] }))
       ]);
-      setPolicies(polRes.policies || []);
-      setDepartments(depRes.departments || []);
+      const policyList = polRes.records || polRes.policies || [];
+      const departmentList = depRes.records || depRes.departments || [];
+      setPolicies(policyList);
+      setDepartments(departmentList);
       setEmployees(empRes.employees || []);
 
-      if (polRes.policies?.[0] && !adjPolicyId) setAdjPolicyId(polRes.policies[0].id);
+      if (policyList[0] && !adjPolicyId) setAdjPolicyId(policyList[0].id);
       if (empRes.employees?.[0] && !adjEmployeeId) setAdjEmployeeId(empRes.employees[0].id);
     } catch (err) {
       console.error('Failed to load leave policies:', err);

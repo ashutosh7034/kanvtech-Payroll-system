@@ -76,11 +76,12 @@ export const CompensationView: React.FC = () => {
     setLoading(true);
     try {
       const [compRes, empRes, tmplRes]: any = await Promise.all([
-        api.get('/compensation/components'),
+        api.get('/masters/salary-components?status=ACTIVE&all=true').catch(() => api.get('/compensation/components')),
         api.get('/employees'),
         api.get('/compensation/structures')
       ]);
-      setComponents(compRes.components || []);
+      const compList = compRes.records || compRes.components || [];
+      setComponents(compList);
       setEmployees(empRes.employees || []);
       setTemplates(tmplRes.structures || []);
 

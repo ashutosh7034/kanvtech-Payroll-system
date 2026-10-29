@@ -89,8 +89,8 @@ export const SalaryColumnMasterView: React.FC<SalaryColumnMasterViewProps> = ({
     setLoading(true);
     setErrorMsg(null);
     try {
-      const res: any = await api.get('/compensation/components');
-      setComponents(res.components || []);
+      const res: any = await api.get('/masters/salary-components?status=ALL&all=true').catch(() => api.get('/compensation/components'));
+      setComponents(res.records || res.components || []);
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to load salary column master records');
     } finally {

@@ -221,7 +221,7 @@ export const ExpensesView: React.FC = () => {
       }
 
       const promises: Promise<any>[] = [
-        api.get('/expenses/categories').catch(() => ({ categories: [] })),
+        api.get('/masters/expense-categories?status=ACTIVE&all=true').catch(() => api.get('/expenses/categories')).catch(() => ({ categories: [] })),
         api.get(`/expenses/claims?${queryParams.toString()}`).catch(() => ({ claims: [], pagination: { totalPages: 1, total: 0 } })),
         api.get('/expenses/travel').catch(() => ({ requests: [] }))
       ];
@@ -236,7 +236,8 @@ export const ExpensesView: React.FC = () => {
       const travelRes = results[2];
       const empRes = results[3];
 
-      setCategories(catRes.categories || []);
+      const categoryList = catRes.records || catRes.categories || [];
+      setCategories(categoryList);
       setClaims(claimRes.claims || []);
       setTotalPages(claimRes.pagination?.totalPages || 1);
       setTotalRecords(claimRes.pagination?.total || 0);

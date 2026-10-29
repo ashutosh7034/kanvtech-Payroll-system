@@ -24,11 +24,12 @@ export const AttendanceView: React.FC = () => {
     setLoading(true);
     try {
       const [shiftsRes, dailyRes, regRes]: any = await Promise.all([
-        api.get('/attendance/shifts'),
+        api.get('/masters/shift-policies?status=ACTIVE&all=true').catch(() => api.get('/attendance/shifts')),
         api.get('/attendance/daily'),
         api.get('/attendance/regularizations')
       ]);
-      setShifts(shiftsRes.shifts || []);
+      const shiftList = shiftsRes.records || shiftsRes.shifts || [];
+      setShifts(shiftList);
       setAttendances(dailyRes.attendances || []);
       setRegularizations(regRes.regularizations || []);
     } catch (err) {

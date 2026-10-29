@@ -27,12 +27,13 @@ export const RecruitmentView: React.FC = () => {
       const [openingsRes, appsRes, branchRes]: any = await Promise.all([
         api.get('/recruitment/openings'),
         api.get('/recruitment/applications'),
-        api.get('/org/branches')
+        api.get('/masters/branches?status=ACTIVE&all=true').catch(() => api.get('/org/branches'))
       ]);
       setOpenings(openingsRes.openings || []);
       setApplications(appsRes.applications || []);
-      setBranches(branchRes.branches || []);
-      if (branchRes.branches?.[0]) setHireBranchId(branchRes.branches[0].id);
+      const branchList = branchRes.records || branchRes.branches || [];
+      setBranches(branchList);
+      if (branchList[0]) setHireBranchId(branchList[0].id);
     } catch (err) {
       console.error('Failed to load recruitment data:', err);
     } finally {
