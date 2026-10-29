@@ -4,15 +4,15 @@ import { formatCurrency } from '../../utils/formatters';
 import {
   X,
   Play,
-  Filter,
   Users,
   AlertTriangle,
-  CheckCircle,
-  Building,
   Search,
   CheckSquare,
   Square,
-  Info
+  Info,
+  ExternalLink,
+  Calendar,
+  CheckCircle2
 } from 'lucide-react';
 
 interface CreatePayrollRunModalProps {
@@ -21,6 +21,7 @@ interface CreatePayrollRunModalProps {
   periods: any[];
   initialPeriodId?: string;
   onRunCreated: (run: any) => void;
+  onViewRun?: (runId: string) => void;
 }
 
 export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
@@ -28,7 +29,8 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
   onClose,
   periods,
   initialPeriodId,
-  onRunCreated
+  onRunCreated,
+  onViewRun
 }) => {
   const [selectedPeriodId, setSelectedPeriodId] = useState(initialPeriodId || (periods[0]?.id || ''));
   const [selectedDepartmentId, setSelectedDepartmentId] = useState('ALL');
@@ -44,6 +46,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
     eligibleCount: number;
     missingStructureCount: number;
     alreadyProcessedCount: number;
+    existingRuns?: any[];
     employees: any[];
     departments: any[];
     branches: any[];
@@ -52,6 +55,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
     eligibleCount: 0,
     missingStructureCount: 0,
     alreadyProcessedCount: 0,
+    existingRuns: [],
     employees: [],
     departments: [],
     branches: []
@@ -82,7 +86,6 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
       params.append('periodId', selectedPeriodId);
       if (selectedDepartmentId !== 'ALL') params.append('departmentId', selectedDepartmentId);
       if (selectedBranchId !== 'ALL') params.append('branchId', selectedBranchId);
-      if (searchQuery.trim()) params.append('search', searchQuery.trim());
 
       const res: any = await api.get(`/payroll/runs/preview-eligible?${params.toString()}`);
       setPreviewData(res);
@@ -112,6 +115,17 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
 
   if (!isOpen) return null;
 
+  // Real-time client-side search across employee code, name, department, branch
+  const filteredEmployees = previewData.employees.filter((emp: any) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.trim().toLowerCase();
+    const fullName = (emp.fullName || '').toLowerCase();
+    const code = (emp.employeeCode || '').toLowerCase();
+    const dept = (emp.department?.name || '').toLowerCase();
+    const branch = (emp.branch?.name || '').toLowerCase();
+    return fullName.includes(q) || code.includes(q) || dept.includes(q) || branch.includes(q);
+  });
+
   const toggleSelectEmployee = (id: string, isEligible: boolean) => {
     if (!isEligible) return;
     const nextSelected = new Set(selectedEmployeeIds);
@@ -132,25 +146,28 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
   };
 
   const selectAllEligible = () => {
-    const nextSelected = new Set<string>();
-    previewData.employees.forEach((emp: any) => {
+    const nextSelected = new Set(selectedEmployeeIds);
+    const nextExcluded = new Set(excludedEmployeeIds);
+    filteredEmployees.forEach((emp: any) => {
       if (emp.isEligible && !emp.alreadyProcessedRun) {
         nextSelected.add(emp.id);
+        nextExcluded.delete(emp.id);
       }
     });
     setSelectedEmployeeIds(nextSelected);
-    setExcludedEmployeeIds(new Set());
-    setExclusionReasons({});
+    setExcludedEmployeeIds(nextExcluded);
   };
 
   const deselectAll = () => {
-    const nextExcluded = new Set<string>();
-    previewData.employees.forEach((emp: any) => {
+    const nextSelected = new Set(selectedEmployeeIds);
+    const nextExcluded = new Set(excludedEmployeeIds);
+    filteredEmployees.forEach((emp: any) => {
       if (emp.isEligible) {
+        nextSelected.delete(emp.id);
         nextExcluded.add(emp.id);
       }
     });
-    setSelectedEmployeeIds(new Set());
+    setSelectedEmployeeIds(nextSelected);
     setExcludedEmployeeIds(nextExcluded);
   };
 
@@ -158,8 +175,27 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
     setExclusionReasons(prev => ({ ...prev, [empId]: reason }));
   };
 
+  // Extract unique existing runs
+  const existingRuns = previewData.existingRuns && previewData.existingRuns.length > 0
+    ? previewData.existingRuns
+    : Array.from(
+        new Map(
+          previewData.employees
+            .filter((e: any) => e.alreadyProcessedRun)
+            .map((e: any) => [e.alreadyProcessedRun.id, e.alreadyProcessedRun])
+        ).values()
+      );
+
+  // Identify the next available period in list
+  const currentPeriodIndex = periods.findIndex(p => p.id === selectedPeriodId);
+  const nextAvailablePeriod = currentPeriodIndex >= 0 && currentPeriodIndex < periods.length - 1
+    ? periods[currentPeriodIndex + 1]
+    : periods.find(p => p.id !== selectedPeriodId);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting) return;
+
     if (!selectedPeriodId) {
       setError('Please select a payroll period.');
       return;
@@ -170,12 +206,11 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
       return;
     }
 
-    // Check if any excluded employees are missing reasons
+    // Default any empty exclusion reasons gracefully
+    const finalReasons = { ...exclusionReasons };
     for (const id of excludedEmployeeIds) {
-      if (!exclusionReasons[id] || !exclusionReasons[id].trim()) {
-        const emp = previewData.employees.find(e => e.id === id);
-        setError(`Please provide an exclusion reason for employee ${emp?.employeeCode || id} (${emp?.fullName || ''}).`);
-        return;
+      if (!finalReasons[id] || !finalReasons[id].trim()) {
+        finalReasons[id] = 'Excluded by payroll officer during batch scope review';
       }
     }
 
@@ -188,7 +223,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
         branchId: selectedBranchId !== 'ALL' ? selectedBranchId : undefined,
         selectedEmployeeIds: Array.from(selectedEmployeeIds),
         excludedEmployeeIds: Array.from(excludedEmployeeIds),
-        exclusionReasons,
+        exclusionReasons: finalReasons,
         remarks: remarks.trim() || undefined
       };
 
@@ -204,7 +239,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
 
   return (
     <div className="modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="modal-dialog" style={{ maxWidth: '880px', maxHeight: '92vh' }} onClick={e => e.stopPropagation()}>
+      <div className="modal-dialog" style={{ maxWidth: '900px', maxHeight: '92vh', width: '95%' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
           <div>
             <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -214,7 +249,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
               Select target organization unit, inspect candidate employees, exclude exceptions with reasons, and draft batch.
             </div>
           </div>
-          <button className="btn-close" onClick={onClose}>
+          <button type="button" className="btn-close" onClick={onClose} aria-label="Close modal">
             <X size={16} />
           </button>
         </div>
@@ -235,7 +270,68 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   gap: '8px'
                 }}
               >
-                <AlertTriangle size={15} /> <span>{error}</span>
+                <AlertTriangle size={15} style={{ flexShrink: 0 }} /> <span>{error}</span>
+              </div>
+            )}
+
+            {/* Zero-Eligibility Explanatory Alert */}
+            {!loadingPreview && previewData.totalCount > 0 && previewData.eligibleCount === 0 && (
+              <div
+                style={{
+                  background: '#f8fafc',
+                  border: '1px solid #cbd5e1',
+                  borderLeft: '4px solid #0284c7',
+                  borderRadius: 'var(--radius-sm)',
+                  padding: '12px 16px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <Info size={18} style={{ color: '#0284c7', flexShrink: 0, marginTop: '2px' }} />
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.85rem', color: '#0f172a' }}>
+                      All employees in this selection have already been processed for this payroll period. Duplicate payroll processing is blocked.
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                      Corporate payroll governance strictly prevents duplicate disbursements for the same period. All candidates in this scope have already been included in finalized or active runs.
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginLeft: '28px' }}>
+                  {existingRuns.length > 0 && onViewRun && (
+                    <button
+                      type="button"
+                      className="btn btn-primary btn-xs"
+                      onClick={() => {
+                        onClose();
+                        onViewRun(existingRuns[0].id);
+                      }}
+                      title={`Open run ${existingRuns[0].runNumber} in Workbench`}
+                    >
+                      <ExternalLink size={12} /> View Existing Run ({existingRuns[0].runNumber} — {existingRuns[0].status})
+                    </button>
+                  )}
+                  {nextAvailablePeriod && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-xs"
+                      onClick={() => setSelectedPeriodId(nextAvailablePeriod.id)}
+                      title={`Switch selection to ${nextAvailablePeriod.name}`}
+                    >
+                      <Calendar size={12} /> Switch to Next Period: {nextAvailablePeriod.name}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="btn btn-outline btn-xs"
+                    onClick={onClose}
+                  >
+                    Return to Workbench
+                  </button>
+                </div>
               </div>
             )}
 
@@ -247,6 +343,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   className="form-control"
                   value={selectedPeriodId}
                   onChange={e => setSelectedPeriodId(e.target.value)}
+                  disabled={loadingPreview || submitting}
                   required
                 >
                   <option value="">Select period...</option>
@@ -264,6 +361,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   className="form-control"
                   value={selectedDepartmentId}
                   onChange={e => setSelectedDepartmentId(e.target.value)}
+                  disabled={loadingPreview || submitting}
                 >
                   <option value="ALL">All Departments (Entire Company)</option>
                   {previewData.departments.map(d => (
@@ -280,6 +378,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   className="form-control"
                   value={selectedBranchId}
                   onChange={e => setSelectedBranchId(e.target.value)}
+                  disabled={loadingPreview || submitting}
                 >
                   <option value="ALL">All Branches & Locations</option>
                   {previewData.branches.map(b => (
@@ -292,7 +391,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
             </div>
 
             {/* Candidate Summary Cards */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
               <div style={{ padding: '10px 12px', background: '#f8fafc', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 600 }}>Total Candidates</div>
                 <div style={{ fontSize: '1.25rem', fontWeight: 700, marginTop: '2px' }}>{previewData.totalCount}</div>
@@ -333,12 +432,31 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                 <input
                   type="text"
                   className="form-control"
-                  style={{ paddingLeft: '32px', fontSize: '0.8rem' }}
-                  placeholder="Search candidate by name or code..."
+                  style={{ paddingLeft: '32px', paddingRight: searchQuery ? '28px' : '10px', fontSize: '0.8rem' }}
+                  placeholder="Search candidate by name, code, or department..."
                   value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); fetchPreview(); } }}
                 />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    style={{
+                      position: 'absolute',
+                      right: '8px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      background: 'transparent',
+                      border: 'none',
+                      color: 'var(--text-muted)',
+                      cursor: 'pointer',
+                      padding: 0
+                    }}
+                    title="Clear search"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
               </div>
 
               <div style={{ display: 'flex', gap: '8px' }}>
@@ -346,6 +464,9 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   type="button"
                   className="btn btn-outline btn-xs"
                   onClick={selectAllEligible}
+                  disabled={loadingPreview || previewData.eligibleCount === 0}
+                  title={previewData.eligibleCount === 0 ? 'No eligible candidates available to select' : 'Select all eligible employees'}
+                  style={{ opacity: previewData.eligibleCount === 0 ? 0.6 : 1, cursor: previewData.eligibleCount === 0 ? 'not-allowed' : 'pointer' }}
                 >
                   <CheckSquare size={13} /> Select All Eligible ({previewData.eligibleCount})
                 </button>
@@ -353,6 +474,9 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                   type="button"
                   className="btn btn-outline btn-xs"
                   onClick={deselectAll}
+                  disabled={loadingPreview || selectedEmployeeIds.size === 0}
+                  title={selectedEmployeeIds.size === 0 ? 'No employees are currently selected' : 'Deselect all candidates'}
+                  style={{ opacity: selectedEmployeeIds.size === 0 ? 0.6 : 1, cursor: selectedEmployeeIds.size === 0 ? 'not-allowed' : 'pointer' }}
                 >
                   <Square size={13} /> Deselect All
                 </button>
@@ -365,9 +489,11 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                 <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                   Scanning employee master & CTC configurations...
                 </div>
-              ) : previewData.employees.length === 0 ? (
+              ) : filteredEmployees.length === 0 ? (
                 <div style={{ padding: '30px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                  No active employees found matching the selected period and organization filters.
+                  {previewData.employees.length === 0
+                    ? 'No active employees found matching the selected period and organization filters.'
+                    : `No candidates match "${searchQuery}". Clear search to view all ${previewData.employees.length} candidates.`}
                 </div>
               ) : (
                 <table className="data-table" style={{ margin: 0, fontSize: '0.775rem' }}>
@@ -384,7 +510,7 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {previewData.employees.map(emp => {
+                    {filteredEmployees.map(emp => {
                       const isSelected = selectedEmployeeIds.has(emp.id);
                       const isExcluded = excludedEmployeeIds.has(emp.id);
 
@@ -402,13 +528,14 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                               disabled={!emp.isEligible}
                               onChange={() => toggleSelectEmployee(emp.id, emp.isEligible)}
                               style={{ cursor: emp.isEligible ? 'pointer' : 'not-allowed' }}
+                              title={!emp.isEligible ? (emp.ineligibilityReason || 'Ineligible for this payroll run') : 'Toggle selection'}
                             />
                           </td>
-                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600 }}>{emp.employeeCode}</td>
-                          <td><strong>{emp.fullName}</strong></td>
+                          <td style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, whiteSpace: 'nowrap' }}>{emp.employeeCode}</td>
+                          <td style={{ fontWeight: 600 }}>{emp.fullName}</td>
                           <td>{emp.department?.name || '—'}</td>
                           <td>{emp.branch?.name || '—'}</td>
-                          <td className="money">
+                          <td className="money" style={{ whiteSpace: 'nowrap' }}>
                             {emp.hasSalaryStructure ? formatCurrency(emp.monthlyGross) : '—'}
                           </td>
                           <td>
@@ -427,13 +554,26 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                             ) : emp.alreadyProcessedRun ? (
                               <span
                                 className="badge badge-gray"
-                                style={{ fontSize: '0.675rem' }}
-                                title={emp.ineligibilityReason}
+                                style={{
+                                  fontSize: '0.675rem',
+                                  cursor: onViewRun ? 'pointer' : 'default',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px'
+                                }}
+                                title={`${emp.ineligibilityReason}. Click to view run.`}
+                                onClick={() => {
+                                  if (onViewRun && emp.alreadyProcessedRun?.id) {
+                                    onClose();
+                                    onViewRun(emp.alreadyProcessedRun.id);
+                                  }
+                                }}
                               >
                                 In {emp.alreadyProcessedRun.runNumber} ({emp.alreadyProcessedRun.status})
+                                {onViewRun && <ExternalLink size={10} />}
                               </span>
                             ) : (
-                              <span className="badge badge-danger" style={{ fontSize: '0.675rem' }}>
+                              <span className="badge badge-danger" style={{ fontSize: '0.675rem' }} title={emp.ineligibilityReason || 'Ineligible'}>
                                 Ineligible
                               </span>
                             )}
@@ -443,13 +583,15 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
                               <input
                                 type="text"
                                 className="form-control"
-                                style={{ fontSize: '0.75rem', padding: '3px 8px', height: '26px', borderColor: !exclusionReasons[emp.id]?.trim() ? '#ef4444' : undefined }}
-                                placeholder="Mandatory exclusion reason..."
+                                style={{ fontSize: '0.75rem', padding: '3px 8px', height: '26px' }}
+                                placeholder="Optional exclusion reason..."
                                 value={exclusionReasons[emp.id] || ''}
                                 onChange={e => handleReasonChange(emp.id, e.target.value)}
                               />
                             ) : (
-                              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>Included in batch</span>
+                              <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>
+                                {isSelected ? 'Included in batch' : '—'}
+                              </span>
                             )}
                           </td>
                         </tr>
@@ -466,10 +608,11 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
               <textarea
                 className="form-control"
                 rows={2}
-                placeholder="e.g. October 2026 Engineering monthly disbursement batch..."
+                placeholder="e.g. Monthly disbursement batch..."
                 value={remarks}
                 onChange={e => setRemarks(e.target.value)}
                 style={{ fontSize: '0.8rem' }}
+                disabled={submitting}
               />
             </div>
           </div>
@@ -487,7 +630,14 @@ export const CreatePayrollRunModal: React.FC<CreatePayrollRunModalProps> = ({
               <button
                 type="submit"
                 className="btn btn-primary btn-sm"
-                disabled={submitting || selectedEmployeeIds.size === 0}
+                disabled={submitting || selectedEmployeeIds.size === 0 || loadingPreview}
+                title={
+                  selectedEmployeeIds.size === 0
+                    ? previewData.eligibleCount === 0
+                      ? 'No eligible employees in this period (all candidates already processed)'
+                      : 'Select at least one eligible employee to initialize batch'
+                    : `Initialize Stage 1 Draft for ${selectedEmployeeIds.size} employees`
+                }
               >
                 {submitting ? 'Initializing Batch...' : `Initialize Stage 1 Draft (${selectedEmployeeIds.size} Staff)`}
               </button>

@@ -1938,6 +1938,10 @@ export const PayrollProcessingView: React.FC = () => {
         onClose={() => setShowGenerateModal(false)}
         periods={periods}
         initialPeriodId={selectedPeriodId}
+        onViewRun={(runId) => {
+          setShowGenerateModal(false);
+          viewRunDetails(runId);
+        }}
         onRunCreated={async (run) => {
           setActionSuccess(`Batch initialized in Stage 1 (DRAFT) for run ${run?.runNumber || ''}`);
           await fetchRuns();

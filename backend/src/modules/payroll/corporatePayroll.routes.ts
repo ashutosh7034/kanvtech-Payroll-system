@@ -189,9 +189,14 @@ corporatePayrollRouter.get('/runs/preview-eligible', authenticate, async (req: R
     });
 
     const slipMap = new Map<string, any>();
+    const existingRunsMap = new Map<string, any>();
     for (const s of existingSlips) {
       slipMap.set(s.employeeId, s.payrollRun);
+      if (s.payrollRun && !existingRunsMap.has(s.payrollRun.id)) {
+        existingRunsMap.set(s.payrollRun.id, s.payrollRun);
+      }
     }
+    const existingRuns = Array.from(existingRunsMap.values());
 
     const enriched = employees.map(emp => {
       const hasSalaryStructure = Boolean(emp.salaryStructure && emp.salaryStructure.lines.length > 0);
@@ -240,6 +245,7 @@ corporatePayrollRouter.get('/runs/preview-eligible', authenticate, async (req: R
       eligibleCount,
       missingStructureCount,
       alreadyProcessedCount,
+      existingRuns,
       employees: enriched,
       departments,
       branches
@@ -1218,7 +1224,10 @@ corporatePayrollRouter.post('/runs/draft', authenticate, requireRole(['payroll_a
     if (branchId && branchId !== 'ALL') {
       employeeWhere.branchId = branchId;
     }
-    if (selectedEmployeeIds && selectedEmployeeIds.length > 0) {
+    if (selectedEmployeeIds !== undefined) {
+      if (selectedEmployeeIds.length === 0) {
+        throw new AppError('At least one eligible employee must be selected to initialize a payroll run', 400);
+      }
       employeeWhere.id = { in: selectedEmployeeIds };
     }
     if (excludedEmployeeIds && excludedEmployeeIds.length > 0) {
